@@ -1,13 +1,12 @@
 /**
  * AudioEngine — Multi-Oscillator Web Audio Engine
- * Enhanced with Soft Lush Sine Harmony Chords for Animals according to active Musical Mode
+ * Clean, robust implementation with lush sine-wave scale-tuned chord harmonies for animal calls.
  */
 
 import {
   DEFAULT_SYNTH_SETTINGS,
   FOREST_THEMES,
   ForestThemeKey,
-  ModeKey,
   MUSICAL_MODES,
   SynthSettings,
 } from '../types/synth';
@@ -29,15 +28,21 @@ class AudioEngine {
   private isMuted: boolean = false;
   private dataArray: Uint8Array = new Uint8Array(0);
 
+  /**
+   * Initializes the Web Audio Context and Master Signal Chain
+   */
   public async initAudio(): Promise<boolean> {
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        this.ctx = new AudioCtx();
+      }
 
       if (this.ctx.state === 'suspended') {
         await this.ctx.resume();
       }
 
+      // Master Compressor for uniform dynamics
       this.masterCompressor = this.ctx.createDynamicsCompressor();
       this.masterCompressor.threshold.setValueAtTime(-18, this.ctx.currentTime);
       this.masterCompressor.knee.setValueAtTime(12, this.ctx.currentTime);
@@ -45,21 +50,23 @@ class AudioEngine {
       this.masterCompressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
       this.masterCompressor.release.setValueAtTime(0.2, this.ctx.currentTime);
 
+      // Master Volume Gain Node
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.settings.masterVolume / 100, this.ctx.currentTime);
 
+      // Real-time FFT Analyser
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = 64;
       this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
 
-      // Filter Node
+      // Main Filter Node
       this.filterNode = this.ctx.createBiquadFilter();
       this.filterNode.type = 'lowpass';
       this.filterNode.frequency.setValueAtTime(this.settings.filterCutoff, this.ctx.currentTime);
       this.filterNode.Q.setValueAtTime(this.settings.filterResonance, this.ctx.currentTime);
 
-      // Delay Node
-      this.delayNode = this.ctx.createDelay();
+      // Delay Node Loop
+      this.delayNode = this.ctx.createDelay(2.0);
       this.delayNode.delayTime.setValueAtTime(this.settings.delayTime, this.ctx.currentTime);
       this.delayFeedbackGain = this.ctx.createGain();
       this.delayFeedbackGain.gain.setValueAtTime(this.settings.delayFeedback / 100, this.ctx.currentTime);
@@ -73,7 +80,7 @@ class AudioEngine {
       this.reverbWetGain = this.ctx.createGain();
       this.reverbWetGain.gain.setValueAtTime(this.settings.reverbWet / 100, this.ctx.currentTime);
 
-      // Node Connections
+      // Connect Signal Graph
       this.filterNode.connect(this.delayNode);
       this.delayNode.connect(this.reverbNode);
       this.reverbNode.connect(this.reverbWetGain);
@@ -88,11 +95,14 @@ class AudioEngine {
 
       return true;
     } catch (e) {
-      console.error('AudioContext Initialization Error:', e);
+      console.error('AudioEngine failed to initialize:', e);
       return false;
     }
   }
 
+  /**
+   * Generates synthetic impulse response for spatial reverb
+   */
   private createImpulseResponse(duration: number, decay: number): AudioBuffer {
     const sampleRate = this.ctx ? this.ctx.sampleRate : 44100;
     const length = sampleRate * duration;
@@ -110,7 +120,7 @@ class AudioEngine {
 
   /**
    * SOFT LUSH SINE CHORD ANIMAL SOUNDS
-   * Synthesizes soft, lush 3-note harmonic sine chords tuned to the active Musical Mode
+   * Plays a 3-note harmonic sine chord matched to the active mode and frequency
    */
   public triggerAnimalChord(baseFreq: number, kind: string): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
@@ -118,7 +128,7 @@ class AudioEngine {
     const mode = MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
     const modeNotes = mode.notes;
 
-    // Find closest note in current scale
+    // Find the closest note in the active musical scale
     let closestIdx = 0;
     let minDiff = Infinity;
     modeNotes.forEach((n, idx) => {
@@ -129,7 +139,7 @@ class AudioEngine {
       }
     });
 
-    // Build Lush Harmonic Chord Intervals (Root, 3rd/4th, 5th/Octave)
+    // Construct 3-note triad indices (Root, 3rd degree, 5th degree)
     const chordIndices = [
       closestIdx,
       (closestIdx + 2) % modeNotes.length,
@@ -139,11 +149,10 @@ class AudioEngine {
     const now = this.ctx.currentTime;
     const chordGain = this.ctx.createGain();
 
-    // Soft organic envelope timing per animal type
     const isBird = kind === 'owl' || kind === 'nightAngel' || kind === 'asianCuckoo';
     const isSmall = kind === 'cricket' || kind === 'frog' || kind === 'bunny';
-    const attack = isBird ? 0.08 : isSmall ? 0.04 : 0.25;
-    const release = isBird ? 0.65 : isSmall ? 0.45 : 1.4;
+    const attack = isBird ? 0.08 : isSmall ? 0.04 : 0.22;
+    const release = isBird ? 0.65 : isSmall ? 0.45 : 1.35;
 
     chordGain.gain.setValueAtTime(0.0001, now);
     chordGain.gain.exponentialRampToValueAtTime(0.18, now + attack);
@@ -154,13 +163,11 @@ class AudioEngine {
       const osc = this.ctx.createOscillator();
       const noteFreq = modeNotes[idx];
 
-      // Soft pure sine warm character
       osc.type = 'sine';
       osc.frequency.setValueAtTime(noteFreq, now);
 
-      // Subtle pitch bend mimic for natural calls
       if (isBird) {
-        osc.frequency.exponentialRampToValueAtTime(noteFreq * 1.05, now + attack);
+        osc.frequency.exponentialRampToValueAtTime(noteFreq * 1.04, now + attack);
         osc.frequency.exponentialRampToValueAtTime(noteFreq, now + attack + release);
       }
 
@@ -172,12 +179,15 @@ class AudioEngine {
       noteGain.connect(chordGain);
 
       osc.start(now);
-      osc.stop(now + attack + release + 0.1);
+      osc.stop(now + attack + release + 0.05);
     });
 
     chordGain.connect(this.filterNode);
   }
 
+  /**
+   * Tap Crystal Pine Tree
+   */
   public triggerTreeTap(freq: number): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -196,6 +206,9 @@ class AudioEngine {
     osc.stop(now + 0.36);
   }
 
+  /**
+   * Spore Mushroom Sound
+   */
   public triggerMushroomSound(freq: number, subtype: number): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -213,6 +226,9 @@ class AudioEngine {
     osc.stop(now + 0.52);
   }
 
+  /**
+   * Wood Stump / Marimba Log Impact
+   */
   public triggerWoodDrum(freq: number): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -231,6 +247,9 @@ class AudioEngine {
     osc.stop(now + 0.2);
   }
 
+  /**
+   * Mineral Stone Chime
+   */
   public triggerStoneChime(freq: number): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -248,6 +267,9 @@ class AudioEngine {
     osc.stop(now + 0.82);
   }
 
+  /**
+   * Crystal Flower Chime
+   */
   public triggerChime(freq: number, duration = 0.6): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -265,6 +287,9 @@ class AudioEngine {
     osc.stop(now + duration + 0.05);
   }
 
+  /**
+   * Foliage Bush Noise Impact
+   */
   public triggerBushNoiseImpact(intensity = 0.85): void {
     if (!this.ctx || !this.filterNode || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -295,14 +320,23 @@ class AudioEngine {
     whiteNoise.stop(now + 0.16);
   }
 
+  /**
+   * Ground Splash Resonance
+   */
   public triggerGroundSplash(freq = 55): void {
     this.triggerWoodDrum(freq);
   }
 
+  /**
+   * Nature Pad trigger helper
+   */
   public triggerNaturePad(freq: number, character = 0): void {
     this.triggerAnimalChord(freq, character === 2 ? 'owl' : character === 3 ? 'frog' : 'deer');
   }
 
+  /**
+   * Immediately silences audio output
+   */
   public masterStop(): void {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
@@ -315,6 +349,9 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Mute Toggle
+   */
   public setMute(muted: boolean): void {
     this.isMuted = muted;
     if (this.masterGain && this.ctx) {
@@ -322,6 +359,9 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Dynamically updates live DSP synth parameters
+   */
   public updateSettings(newSettings: Partial<SynthSettings>): void {
     this.settings = { ...this.settings, ...newSettings };
     if (!this.ctx) return;
@@ -347,6 +387,9 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Applies Biome-specific DSP Presets
+   */
   public applyBiomeDsp(themeKey: ForestThemeKey): void {
     const theme = FOREST_THEMES[themeKey];
     if (theme && theme.dsp) {
@@ -366,6 +409,9 @@ class AudioEngine {
     return { ...this.settings };
   }
 
+  /**
+   * Calculates audio RMS energy for visual pulsing
+   */
   public getAverageEnergy(): number {
     if (!this.analyser) return 0;
     this.analyser.getByteFrequencyData(this.dataArray);
