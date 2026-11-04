@@ -15,11 +15,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ accentColor })
     if (!ctx) return;
 
     let animId: number;
+    let lastDraw = 0;
+    const frameInterval = 1000 / 30;
     const freqData = new Uint8Array(64);
     const timeData = new Uint8Array(64);
 
-    const render = () => {
+    const render = (timestamp: number) => {
       animId = requestAnimationFrame(render);
+      if (timestamp - lastDraw < frameInterval) return;
+      lastDraw = timestamp;
       const width = canvas.width;
       const height = canvas.height;
 
@@ -74,7 +78,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ accentColor })
       ctx.globalAlpha = 1.0;
     };
 
-    render();
+    animId = requestAnimationFrame(render);
 
     return () => {
       cancelAnimationFrame(animId);

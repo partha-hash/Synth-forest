@@ -106,8 +106,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   };
 
   return (
-    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-[96vw] max-w-4xl no-scene-drag select-none transition-all duration-300">
-      <div className="relative rounded-2xl border border-emerald-500/25 bg-[#03150e]/92 shadow-[0_0_35px_rgba(2,28,18,0.7)] backdrop-blur-xl overflow-hidden text-emerald-50">
+    <div className="lowpoly-ui fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-[96vw] max-w-4xl no-scene-drag select-none transition-all duration-300">
+      <div className="lowpoly-panel relative rounded-xl border border-[#89956b]/30 bg-[#18251b]/95 shadow-lg backdrop-blur-md overflow-hidden text-[#f0ead8]">
         {/* Subtle Ambient Bioluminescent Gradient Line */}
         <div
           className="absolute top-0 inset-x-0 h-[1.5px] opacity-75"

@@ -142,13 +142,14 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     // 3. Renderer with ACES Tone Mapping
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
-      powerPreference: 'high-performance',
+      // Flat, faceted forms read clearly without expensive multisample antialiasing.
+      antialias: false,
+      powerPreference: 'low-power',
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 1.35));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     container.innerHTML = '';
@@ -160,6 +161,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     if (!isSoftwareGl) {
       composer = new EffectComposer(renderer);
+      // Bloom is deliberately rendered below full resolution; it is atmosphere, not the focus.
+      composer.setPixelRatio(0.8);
       const renderPass = new RenderPass(scene, camera);
       composer.addPass(renderPass);
 
@@ -1464,6 +1467,18 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     };
     window.addEventListener('resize', onResize);
 
+    // Apply a consistent low-poly finish to lit meshes while preserving their existing geometry.
+    scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => {
+        if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhongMaterial) {
+          material.flatShading = true;
+          material.needsUpdate = true;
+        }
+      });
+    });
+
     // 14. Main Animation & Render Loop
     let animFrameId = 0;
     const clock = new THREE.Clock();
@@ -1477,7 +1492,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Theme Dynamic Updating
       const activeTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
-      scene.background = new THREE.Color(activeTheme.fogColor);
+      (scene.background as THREE.Color).set(activeTheme.fogColor);
       (scene.fog as THREE.FogExp2).color.set(activeTheme.fogColor);
       ambientLight.color.set(activeTheme.ambientLightColor);
       hemiLight.color.set(activeTheme.keyLightColor);
