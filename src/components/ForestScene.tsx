@@ -118,15 +118,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const container = mountRef.current;
     if (!container) return;
 
-    // Detect constrained devices before allocating the scene's render targets.
-    // Mobile GPUs can report themselves as hardware-accelerated while still
-    // struggling with a full-resolution EffectComposer + bloom pipeline.
-    const isMobileDevice =
-      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 900;
-
+    // Detect Software WebGL
     const isSoftwareGl = (() => {
-      const probeCanvas = document.createElement('canvas');
-      const gl = probeCanvas.getContext('webgl2');
+      const gl = document.createElement('canvas').getContext('webgl2');
       if (!gl) return true;
       const ext = gl.getExtension('WEBGL_debug_renderer_info');
       const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
@@ -134,10 +128,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       gl.getExtension('WEBGL_lose_context')?.loseContext();
       return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
     })();
-
-    // Mobile-safe rendering: avoid two extra full-screen render targets used by
-    // bloom and keep the drawing buffer close to the device's native pixel size.
-    const usePostProcessing = !isSoftwareGl && !isMobileDevice;
 
     // 1. Scene & Lucid Fog
     const scene = new THREE.Scene();
@@ -152,18 +142,13 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     // 3. Renderer with ACES Tone Mapping
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl && !isMobileDevice,
-      powerPreference: isMobileDevice ? 'default' : 'high-performance',
-      alpha: false,
-      stencil: false,
-      depth: true,
+      antialias: !isSoftwareGl,
+      powerPreference: 'high-performance',
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
-    renderer.setPixelRatio(
-      isSoftwareGl || isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.75)
-    );
+    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     container.innerHTML = '';
@@ -173,7 +158,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     let composer: EffectComposer | null = null;
     let bloomPass: UnrealBloomPass | null = null;
 
-    if (usePostProcessing) {
+    if (!isSoftwareGl) {
       composer = new EffectComposer(renderer);
       const renderPass = new RenderPass(scene, camera);
       composer.addPass(renderPass);
@@ -1530,7 +1515,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         const breathe = Math.sin(elapsed * 2.2 + animal.freq) * 0.03;
         animal.group.scale.y = 1 + breathe;
 
-        if (animal.ears) {
+        if (animal.ears.length >= 2) {
           const earTilt = Math.sin(elapsed * 1.5) * 0.1;
           animal.ears[0].rotation.z = -0.12 + earTilt;
           animal.ears[1].rotation.z = 0.12 - earTilt;
@@ -1538,12 +1523,12 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         if (animal.head) {
           animal.head.rotation.y = Math.sin(elapsed * 0.8) * 0.12;
         }
-        if (animal.wings) {
+        if (animal.wings.length >= 2) {
           const wingFlap = Math.sin(elapsed * 3.5) * 0.08;
           animal.wings[0].rotation.z = -0.22 + wingFlap;
           animal.wings[1].rotation.z = 0.22 - wingFlap;
         }
-        if (animal.antenna) {
+        if (animal.antenna.length >= 2) {
           const antTwitch = Math.sin(elapsed * 4.0) * 0.15;
           animal.antenna[0].rotation.z = -0.2 + antTwitch;
           animal.antenna[1].rotation.z = 0.2 - antTwitch;
@@ -1659,7 +1644,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
 
       // Render Loop
-      if (composer && bloomRef.current && !isMobileDevice) {
+      if (composer && bloomRef.current) {
         composer.render();
       } else {
         renderer.render(scene, camera);
