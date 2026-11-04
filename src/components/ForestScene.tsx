@@ -2,10 +2,10 @@
  * redowan's synth forest - 3D Nature Scene
  * Features:
  * - Circular Little-Planet Curvature & Toroidal Wrapping
- * - Integrated Irregular Pond with animated water ripples & grounded shoreline plants
- * - Dedicated Animal Habitats (6.5m spatial clearance around all fauna)
+ * - Integrated Irregular Pond with animated water ripples & shoreline flora
+ * - Dedicated Animal Habitats (6.5m clear spatial buffer around all fauna)
  * - Soft Lush Sine-Wave Scale-Tuned Animal Chord Harmonies
- * - Two-Finger Sweep Gesture for Biome cycling & full UnrealBloomPass post-processing
+ * - Touch & drag camera controls, fireflies, spore particles, and UnrealBloomPass
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -126,14 +126,20 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const container = mountRef.current;
     if (!container) return;
 
+    // Safe WebGL Context & Software GPU Detection Guard
     const isSoftwareGl = (() => {
-      const gl = document.createElement('canvas').getContext('webgl2');
-      if (!gl) return true;
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
-      const gpu = String(gl.getParameter(param));
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-      return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if (!gl) return true;
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
+        const gpu = String(gl.getParameter(param));
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+      } catch {
+        return true;
+      }
     })();
 
     // 1. Scene & Fog Setup
@@ -147,7 +153,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     camera.position.set(0, 2.4, 8);
     camera.rotation.order = 'YXZ';
 
-    // 3. Renderer with Tone Mapping
+    // 3. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
       powerPreference: 'high-performance',
@@ -272,7 +278,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     atmoRing.position.y = -20;
     scene.add(atmoRing);
 
-    // Integrated Pond Geometry
+    // Integrated Pond Mesh
     const pondY = getLittlePlanetHeight(pondCenter.x, pondCenter.y);
     const pondSegments = 64;
     const pondShape = new THREE.Shape();
@@ -344,7 +350,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     shoreMesh.position.set(pondCenter.x, pondY, pondCenter.y);
     scene.add(shoreMesh);
 
-    // 7. Animal Spawns with Spatial Clearance Controls
+    // 7. Animal Spawns with Spatial Clearance Buffer
     const animalSpawns = [
       { kind: 'bunny' as const, x: -16, z: -18, freq: 392, label: 'Forest Bunny' },
       { kind: 'deer' as const, x: 24, z: -24, freq: 293.66, label: 'Grove Deer' },
@@ -395,11 +401,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       emissiveIntensity: 0.45,
     });
     const mushroomStemMat = new THREE.MeshStandardMaterial({ color: 0xe0e7ff, roughness: 0.5 });
-    const saplingLeafMat = new THREE.MeshStandardMaterial({ color: 0x4f9b58, roughness: 0.82 });
-    const mossMat = new THREE.MeshStandardMaterial({ color: 0x527d45, roughness: 1.0 });
-    const flowerStemMat = new THREE.MeshStandardMaterial({ color: 0x4d8b48, roughness: 0.9 });
-    const flowerPetalMat = new THREE.MeshStandardMaterial({ color: 0xd98bc7, roughness: 0.55 });
-    const flowerCenterMat = new THREE.MeshStandardMaterial({ color: 0xf4cf69, roughness: 0.55 });
 
     const registerProp = (
       group: THREE.Group,
@@ -426,7 +427,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       });
     };
 
-    // 8. Stationary Interactive Wildlife
+    // 8. Wildlife Mesh Construction
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
       cream: new THREE.MeshStandardMaterial({ color: 0xd8c6a4, roughness: 0.92 }),
@@ -435,55 +436,40 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       tan: new THREE.MeshStandardMaterial({ color: 0xb88754, roughness: 0.9 }),
       white: new THREE.MeshStandardMaterial({ color: 0xe8e6dd, roughness: 0.75 }),
       green: new THREE.MeshStandardMaterial({ color: 0x6b9b54, roughness: 0.8 }),
-      gold: new THREE.MeshStandardMaterial({ color: 0xd9b46b, roughness: 0.7 }),
-      eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
+      eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
     };
     const animalSphere = new THREE.SphereGeometry(1, 8, 6);
-    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 5);
 
     animalSpawns.forEach((spawn, idx) => {
       const group = new THREE.Group();
       let headMesh: THREE.Object3D | undefined;
       let bodyMesh: THREE.Object3D | undefined;
-      const wingMeshes: THREE.Object3D[] = [];
 
-      const addPart = (geo: THREE.BufferGeometry, mat: THREE.Material, px: number, py: number, pz: number, sx: number, sy: number, sz: number, rz = 0) => {
+      const addPart = (geo: THREE.BufferGeometry, mat: THREE.Material, px: number, py: number, pz: number, sx: number, sy: number, sz: number) => {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(px, py, pz);
         mesh.scale.set(sx, sy, sz);
-        mesh.rotation.z = rz;
         mesh.castShadow = true;
         group.add(mesh);
         return mesh;
       };
 
-      const eyes = () => {
-        addPart(animalSphere, animalMats.eye, -0.19, 0.55, -0.34, 0.055, 0.065, 0.04);
-        addPart(animalSphere, animalMats.eye, 0.19, 0.55, -0.34, 0.055, 0.065, 0.04);
-      };
-
       if (spawn.kind === 'bunny') {
         bodyMesh = addPart(animalSphere, animalMats.cream, 0, 0.35, 0, 0.34, 0.29, 0.48);
         headMesh = addPart(animalSphere, animalMats.cream, 0, 0.62, -0.34, 0.27, 0.27, 0.27);
-        addPart(animalSphere, animalMats.cream, -0.13, 1.0, -0.37, 0.09, 0.36, 0.09, -0.12);
-        addPart(animalSphere, animalMats.cream, 0.13, 1.0, -0.37, 0.09, 0.36, 0.09, 0.12);
-        eyes();
       } else if (spawn.kind === 'deer') {
         bodyMesh = addPart(animalSphere, animalMats.tan, 0, 0.55, 0.05, 0.34, 0.42, 0.62);
         headMesh = addPart(animalSphere, animalMats.tan, 0, 0.88, -0.42, 0.2, 0.27, 0.23);
-        eyes();
       } else if (spawn.kind === 'bear') {
         bodyMesh = addPart(animalSphere, animalMats.brown, 0, 0.48, 0.02, 0.48, 0.48, 0.52);
         headMesh = addPart(animalSphere, animalMats.brown, 0, 0.88, -0.36, 0.34, 0.33, 0.3);
-        eyes();
       } else if (spawn.kind === 'frog') {
         bodyMesh = addPart(animalSphere, animalMats.green, 0, 0.22, 0, 0.4, 0.22, 0.34);
       } else {
         const bodyMat = spawn.kind === 'owl' ? animalMats.tan : spawn.kind === 'nightAngel' ? animalMats.glow : animalMats.brown;
         bodyMesh = addPart(animalSphere, bodyMat, 0, 0.58, 0, 0.32, 0.43, 0.3);
         headMesh = addPart(animalSphere, bodyMat, 0, 0.9, -0.12, 0.28, 0.27, 0.25);
-        eyes();
       }
 
       const groundY = getLittlePlanetHeight(spawn.x, spawn.z);
@@ -511,11 +497,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         lastSoundAt: -100,
         headPart: headMesh,
         bodyPart: bodyMesh,
-        wingParts: wingMeshes,
       });
     });
 
-    // 9. Clustered Flora/Prop Placement with Animal Clearance Validation
+    // 9. Clustered Flora Placement with Animal Clearance Validation
     const groveCenters = [
       { x: -25, z: -22 },
       { x: 26, z: -26 },
@@ -542,9 +527,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // A. Pines (68 Trees)
     for (let i = 0; i < 68; i++) {
       const treeGroup = new THREE.Group();
-      const isElder = i % 8 === 0;
-      const scaleRatio = (isElder ? 1.45 : 0.8) + Math.random() * 0.4;
-
+      const scaleRatio = 0.8 + Math.random() * 0.4;
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, 2.4 * scaleRatio, 7), trunkMat);
       trunk.position.y = 1.2 * scaleRatio;
       treeGroup.add(trunk);
@@ -560,7 +543,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.name})`);
     }
 
-    // B. Bioluminescent Mushrooms
+    // B. Bioluminescent Mushrooms (26)
     for (let i = 0; i < 26; i++) {
       const shroomGroup = new THREE.Group();
       const mScale = 0.75 + Math.random() * 0.6;
@@ -579,7 +562,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(shroomGroup, 'mushroom', note.freq * 1.25, note.noteName, `Spore Bell (${note.name})`, cap, subtype);
     }
 
-    // C. Wood Stumps
+    // C. Wood Stumps (26)
     for (let i = 0; i < 26; i++) {
       const stumpGroup = new THREE.Group();
       const outerBark = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.15, 0.85, 8), trunkMat);
@@ -595,7 +578,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(stumpGroup, 'stump', note.freq * 0.72, note.noteName, `Wood Tongue Drum (${note.name})`);
     }
 
-    // D. Marimba Logs
+    // D. Marimba Logs (22)
     for (let i = 0; i < 22; i++) {
       const logGroup = new THREE.Group();
       const mainLog = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 3.8, 8), logMat);
@@ -610,7 +593,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(logGroup, 'log', note.freq * 0.88, note.noteName, `Marimba Log (${note.name})`);
     }
 
-    // E. Mineral Stones
+    // E. Mineral Stones (28)
     for (let i = 0; i < 28; i++) {
       const stoneGroup = new THREE.Group();
       const s1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), stoneMat);
@@ -692,7 +675,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
     };
 
-    // 12. Audio Interaction Triggers
+    // 12. Audio Interaction Triggers (Sine-Wave Harmony Chords)
     const triggerAnimalSound = (animal: ForestAnimal) => {
       triggerGroundSplashEffect(animal.posX, animal.posY, animal.posZ, 0xfbbf24);
       audioEngine.triggerAnimalChord(animal.freq, animal.kind);
@@ -817,7 +800,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     };
     window.addEventListener('resize', onResize);
 
-    // 14. Render Loop
+    // 14. Render Loop with Safe Composer Guard
     let animFrameId = 0;
     const clock = new THREE.Clock();
 
@@ -843,7 +826,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         bloomPass.threshold = activeTheme.bloomThreshold;
       }
 
-      // Movement Calculations
+      // Joystick Movement
       _moveDir.set(0, 0, 0);
       const jv = joystickRef.current;
       if (jv && (Math.abs(jv.x) > 0.05 || Math.abs(jv.y) > 0.05)) {
@@ -899,7 +882,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         animal.wasInside = inside;
       }
 
-      // Prop Animations
+      // Prop Scale Bounce
       for (const prop of interactiveProps) {
         if (prop.animTimer > 0) {
           prop.animTimer = Math.max(0, prop.animTimer - delta * 3.4);
@@ -914,6 +897,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         }
       }
 
+      // Safe Composer Render Guard
       if (composer && bloomRef.current) {
         composer.render();
       } else {
