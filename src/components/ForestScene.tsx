@@ -956,13 +956,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       });
     };
 
-    const onSceneClick = (e: MouseEvent) => {
-      if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
-      // Prevent clicks immediately following multi-touch gestures (e.g. lifting fingers from swipe)
-      if (Date.now() - lastTwoFingerGestureTime < 450) return;
-
-      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    const performSceneInteraction = (clientX: number, clientY: number) => {
+      pointer.x = (clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
 
       const intersects = raycaster.intersectObjects(clickableMeshes, true);
@@ -989,6 +985,72 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         onObjectPlayedRef.current?.('ground', 'Ground Splash Impact', groundFreq, 'G1');
       }
     };
+
+    const onSceneClick = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
+      // Ignore the synthetic click that some browsers emit after our multi-touch tap handler.
+      if (Date.now() - lastTouchTapTime < 500) return;
+      // Prevent clicks immediately following multi-touch gestures (e.g. lifting fingers from swipe).
+      if (Date.now() - lastTwoFingerGestureTime < 450) return;
+      performSceneInteraction(e.clientX, e.clientY);
+    };
+
+    // A browser often does not dispatch a normal click when one finger is still
+    // holding the walking joystick. Detect a short, stationary second-finger tap
+    // and raycast it directly so trees, mushrooms, stones and the ground remain playable.
+    type SceneTouchTap = { x: number; y: number; startX: number; startY: number; startedAt: number; moved: boolean; eligible: boolean };
+    const sceneTouchTaps = new Map<number, SceneTouchTap>();
+    let lastTouchTapTime = 0;
+    const isSceneControl = (target: EventTarget | null) =>
+      target instanceof Element && Boolean(target.closest('.no-scene-drag, button, input, select, textarea, [role="button"]'));
+
+    const onSceneTouchStart = (e: TouchEvent) => {
+      if (isSceneControl(e.target)) return;
+      Array.from(e.changedTouches).forEach((touch) => {
+        // The right side is reserved for free-look and for tapping playable props.
+        const eligible = touch.clientX >= window.innerWidth * 0.65;
+        sceneTouchTaps.set(touch.identifier, {
+          x: touch.clientX, y: touch.clientY,
+          startX: touch.clientX, startY: touch.clientY,
+          startedAt: performance.now(), moved: false, eligible,
+        });
+      });
+    };
+
+    const onSceneTouchMove = (e: TouchEvent) => {
+      Array.from(e.changedTouches).forEach((touch) => {
+        const tap = sceneTouchTaps.get(touch.identifier);
+        if (!tap) return;
+        tap.x = touch.clientX;
+        tap.y = touch.clientY;
+        if (Math.hypot(tap.x - tap.startX, tap.y - tap.startY) > 14) tap.moved = true;
+      });
+    };
+
+    const onSceneTouchEnd = (e: TouchEvent) => {
+      if (e.type !== 'touchend') {
+        Array.from(e.changedTouches).forEach((touch) => sceneTouchTaps.delete(touch.identifier));
+        return;
+      }
+      Array.from(e.changedTouches).forEach((touch) => {
+        const tap = sceneTouchTaps.get(touch.identifier);
+        if (!tap) return;
+        sceneTouchTaps.delete(touch.identifier);
+        const duration = performance.now() - tap.startedAt;
+        const stayedStill = !tap.moved && Math.hypot(touch.clientX - tap.startX, touch.clientY - tap.startY) <= 14;
+        // Only fire while another finger remains down: this is specifically the
+        // second-finger interaction used to play objects while continuing to walk.
+        if (tap.eligible && stayedStill && duration <= 700 && e.touches.length > 0) {
+          lastTouchTapTime = Date.now();
+          performSceneInteraction(touch.clientX, touch.clientY);
+        }
+      });
+    };
+
+    window.addEventListener('touchstart', onSceneTouchStart, { passive: true });
+    window.addEventListener('touchmove', onSceneTouchMove, { passive: true });
+    window.addEventListener('touchend', onSceneTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onSceneTouchEnd, { passive: true });
     window.addEventListener('click', onSceneClick);
 
     // 13. Window Resize
@@ -1236,6 +1298,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       window.removeEventListener('touchend', onPointerUp);
       window.removeEventListener('touchcancel', onPointerUp);
       window.removeEventListener('click', onSceneClick);
+      window.removeEventListener('touchstart', onSceneTouchStart);
+      window.removeEventListener('touchmove', onSceneTouchMove);
+      window.removeEventListener('touchend', onSceneTouchEnd);
+      window.removeEventListener('touchcancel', onSceneTouchEnd);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('synth-tap-tree', handleCustomTreeTap);
 
