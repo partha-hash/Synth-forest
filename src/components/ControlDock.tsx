@@ -399,7 +399,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                                     const now = Date.now();
                                     const last = lastStepTapRef.current[stepIdx] || 0;
                                     lastStepTapRef.current[stepIdx] = now;
-                                    if (now - last < 300) {
+                                    if (now - last < 350) {
                                       lastStepTapRef.current[stepIdx] = 0;
                                       audioEngine.setMelodyStep(stepIdx, null);
                                       setMelodyPattern(audioEngine.getMelodyPattern());
@@ -437,20 +437,20 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   </div>
                 </div>
 
-                {/* 4-Note Modal Bassline Card */}
+                {/* Four-bar sustained atmospheric bass phrase */}
                 <div className="p-3 rounded-xl bg-emerald-950/25 border border-emerald-500/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Radio className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="font-mono text-xs font-bold text-emerald-200 uppercase tracking-wider">
-                        4-Note Modal Bassline (Greek Mode Scale Degrees)
+                        4-Bar Atmospheric Bassline
                       </span>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
-                        Beat {activeBeat} • {activeBassNote}
+                        Bar cycle • {activeBassNote}
                       </span>
                     </div>
                     <span className="text-[10px] font-mono text-emerald-400/60 hidden sm:inline">
-                      Deep Sub/Triangle Voice (Beats 1-4)
+                      Sustained warm sub • one note per bar
                     </span>
                   </div>
 
@@ -460,38 +460,38 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       const safeDeg = degree === null ? 0 : Math.min(currentMode.notes.length - 1, degree);
                       const noteName = degree === null ? '—' : currentMode.noteNames[safeDeg] || 'C2';
                       const freq = degree === null ? 0 : Math.round(currentMode.notes[safeDeg] * 0.5);
-                      const degreeRoman = ['Root (I)', 'Degree (II/III)', 'Fifth (V)', 'Cadence (VII/II)'][bIdx];
+                      const degreeRoman = ['Root', 'Colour', 'Fifth', 'Resolve'][bIdx];
 
                       return (
                         <button
                           key={bIdx}
                           onClick={() => {
-                            // Double-tap (two taps within 300ms) clears this bass beat
+                            // Double-tap (two taps within 350ms) clears this bar
                             const now = Date.now();
                             const last = lastBassTapRef.current[bIdx] || 0;
                             lastBassTapRef.current[bIdx] = now;
-                            if (now - last < 300) {
+                            if (now - last < 350) {
                               lastBassTapRef.current[bIdx] = 0;
                               audioEngine.setBassNote(bIdx, null);
                               setBassPattern(audioEngine.getBassPattern());
                               return;
                             }
 
-                            // Single tap: add the root note, or cycle to the next degree
+                            // Single tap: add a note or cycle its modal colour
                             const nextDeg =
                               degree === null ? 0 : (degree + 1) % Math.min(currentMode.notes.length, 7);
                             audioEngine.setBassNote(bIdx, nextDeg);
                             setBassPattern(audioEngine.getBassPattern());
-                            audioEngine.triggerBassVoice(currentMode.notes[nextDeg] * 0.5);
+                            audioEngine.triggerBassVoice(currentMode.notes[nextDeg] * 0.5, 1.8);
                           }}
                           className={`touch-manipulation p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
                             isCurrentBeat
                               ? 'bg-emerald-400 text-emerald-950 font-bold border-emerald-300 shadow-[0_0_16px_rgba(52,211,153,0.6)] scale-[1.02]'
                               : 'bg-[#020e09]/80 border-emerald-500/20 text-emerald-200 hover:border-emerald-400/40'
                           }`}
-                          title={`Beat ${bIdx + 1}: click to cycle bass degree, double-tap to clear`}
+                          title={`Bar ${bIdx + 1}: tap to change note, double-tap to clear`}
                         >
-                          <div className="text-[9px] font-mono opacity-60">BEAT {bIdx + 1}</div>
+                          <div className="text-[9px] font-mono opacity-60">BAR {bIdx + 1}</div>
                           <div className="text-sm font-mono font-bold tracking-tight">{noteName}</div>
                           <div className="text-[9px] font-mono opacity-70">{degree === null ? 'rest' : `${freq} Hz`}</div>
                           <div className="text-[8px] font-mono opacity-50 mt-0.5">{degreeRoman}</div>
