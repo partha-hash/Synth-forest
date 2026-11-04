@@ -36,8 +36,10 @@ export class AudioEngine {
   private delayFeedbackGainL: GainNode | null = null;
   private delayFeedbackGainR: GainNode | null = null;
   private delayWetGain: GainNode | null = null;
+  private delayReturnHighpass: BiquadFilterNode | null = null;
   private reverbConvolver: ConvolverNode | null = null;
   private reverbWetGain: GainNode | null = null;
+  private reverbReturnHighpass: BiquadFilterNode | null = null;
 
   // Continuous Sub-Bass / Drone Pad
   private subBassOsc1: OscillatorNode | null = null;
@@ -179,7 +181,13 @@ export class AudioEngine {
     this.delayFeedbackGainR.connect(this.delayNodeL);
     delayFilterR.connect(this.delayWetGain);
 
-    this.delayWetGain.connect(this.masterFilter);
+    // Keep the delay spacious without letting low-frequency energy build up.
+    this.delayReturnHighpass = this.ctx.createBiquadFilter();
+    this.delayReturnHighpass.type = 'highpass';
+    this.delayReturnHighpass.frequency.setValueAtTime(170, this.ctx.currentTime);
+    this.delayReturnHighpass.Q.setValueAtTime(0.707, this.ctx.currentTime);
+    this.delayWetGain.connect(this.delayReturnHighpass);
+    this.delayReturnHighpass.connect(this.masterFilter);
 
     // Algorithmic Reverb
     this.reverbConvolver = this.ctx.createConvolver();
@@ -190,12 +198,19 @@ export class AudioEngine {
 
     this.effectsBus.connect(this.reverbConvolver);
     this.reverbConvolver.connect(this.reverbWetGain);
-    this.reverbWetGain.connect(this.masterFilter);
+    // High-pass the reverb return so kick/bass fundamentals stay dry and defined.
+    this.reverbReturnHighpass = this.ctx.createBiquadFilter();
+    this.reverbReturnHighpass.type = 'highpass';
+    this.reverbReturnHighpass.frequency.setValueAtTime(220, this.ctx.currentTime);
+    this.reverbReturnHighpass.Q.setValueAtTime(0.707, this.ctx.currentTime);
+    this.reverbWetGain.connect(this.reverbReturnHighpass);
+    this.reverbReturnHighpass.connect(this.masterFilter);
 
     // Dedicated Drone/Pad Master Gain Node - strictly 0.0 (silent) when not activated
     this.padMasterGain = this.ctx.createGain();
     this.padMasterGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
-    this.padMasterGain.connect(this.effectsBus);
+    // Bass/drone is routed directly to the master path: no reverb or delay send.
+    this.padMasterGain.connect(this.masterFilter);
   }
 
   private generateForestImpulseResponse(durationSec: number, decayRate: number): AudioBuffer {
@@ -820,7 +835,7 @@ export class AudioEngine {
   // durationSeconds is normally one full bar, so the bass supports the harmony
   // instead of retriggering on every beat.
   public triggerBassVoice(freq: number, durationSeconds: number = 1.8) {
-    if (!this.ctx || !this.effectsBus || !Number.isFinite(freq) || freq <= 0) return;
+    if (!this.ctx || !this.masterFilter || !Number.isFinite(freq) || freq <= 0) return;
     const now = this.ctx.currentTime;
     const duration = Math.max(0.5, Math.min(8, durationSeconds));
 
@@ -851,7 +866,8 @@ export class AudioEngine {
     osc1.connect(filter);
     osc2.connect(filter);
     filter.connect(gain);
-    gain.connect(this.effectsBus);
+    // Keep the sequenced bass completely dry; ambience is created by the other voices.
+    gain.connect(this.masterFilter);
     osc1.start(now);
     osc2.start(now);
     osc1.stop(now + duration + 0.03);
