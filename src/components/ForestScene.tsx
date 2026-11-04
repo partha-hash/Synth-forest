@@ -32,7 +32,7 @@ interface ForestSceneProps {
   joystickVector: { x: number; y: number };
   onThemeCycle?: (newTheme: ForestThemeKey) => void;
   onObjectPlayed?: (
-    type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'ground',
+    type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower' | 'ground',
     label: string,
     freq: number,
     noteName: string
@@ -41,7 +41,7 @@ interface ForestSceneProps {
 
 interface InteractiveProp {
   group: THREE.Group;
-  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom';
+  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower';
   originalScale: THREE.Vector3;
   animTimer: number;
   freq: number;
@@ -276,6 +276,15 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       roughness: 0.5,
     });
 
+    // Small forest-floor details: shared materials keep the added props lightweight.
+    const saplingLeafMat = new THREE.MeshStandardMaterial({ color: 0x4f9b58, roughness: 0.82 });
+    const mossMat = new THREE.MeshStandardMaterial({ color: 0x527d45, roughness: 1.0 });
+    const flowerStemMat = new THREE.MeshStandardMaterial({ color: 0x4d8b48, roughness: 0.9 });
+    const flowerPetalMat = new THREE.MeshStandardMaterial({
+      color: 0xd98bc7, roughness: 0.55, emissive: 0x542044, emissiveIntensity: 0.12,
+    });
+    const flowerCenterMat = new THREE.MeshStandardMaterial({ color: 0xf4cf69, roughness: 0.55 });
+
     const registerProp = (
       group: THREE.Group,
       type: InteractiveProp['type'],
@@ -497,6 +506,77 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       bushGroup.position.set(pos.x, pos.y, pos.z);
 
       registerProp(bushGroup, 'bush', 850, 'Rustle', `Foliage Bush #${i + 1}`);
+    }
+
+    // --- G. Tiny Saplings (24 interactive young trees) ---
+    // Kept deliberately shorter and more delicate than the main crystal pines.
+    const saplingCount = 24;
+    for (let i = 0; i < saplingCount; i++) {
+      const sapling = new THREE.Group();
+      const scale = 0.62 + Math.random() * 0.32;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.095, 1.05 * scale, 6), trunkMat);
+      stem.position.y = 0.52 * scale;
+      const leafA = new THREE.Mesh(new THREE.SphereGeometry(0.34 * scale, 7, 6), saplingLeafMat);
+      leafA.position.set(0, 1.05 * scale, 0);
+      const leafB = new THREE.Mesh(new THREE.SphereGeometry(0.27 * scale, 7, 6), saplingLeafMat);
+      leafB.position.set(0.22 * scale, 0.82 * scale, 0.12 * scale);
+      const leafC = new THREE.Mesh(new THREE.SphereGeometry(0.25 * scale, 7, 6), saplingLeafMat);
+      leafC.position.set(-0.2 * scale, 0.78 * scale, -0.1 * scale);
+      sapling.add(stem, leafA, leafB, leafC);
+      const pos = getClusteredPosition(i + 31, 25);
+      sapling.position.set(pos.x, pos.y, pos.z);
+      sapling.rotation.y = Math.random() * Math.PI * 2;
+      const note = getModeNote(i + 1);
+      registerProp(sapling, 'sapling', note.freq * 0.82, note.noteName, `Young Sapling (${note.name})`);
+    }
+
+    // --- H. Moss-Covered Sticks (30 small, playable forest-floor pieces) ---
+    const mossStickCount = 30;
+    for (let i = 0; i < mossStickCount; i++) {
+      const stick = new THREE.Group();
+      const length = 1.25 + Math.random() * 1.05;
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.12, length, 6), logMat);
+      branch.rotation.z = Math.PI / 2;
+      branch.position.y = 0.13;
+      const mossPatch1 = new THREE.Mesh(new THREE.SphereGeometry(0.19, 6, 5), mossMat);
+      mossPatch1.scale.set(1.5, 0.48, 0.8);
+      mossPatch1.position.set(-0.25, 0.22, 0.015);
+      const mossPatch2 = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 5), mossMat);
+      mossPatch2.scale.set(1.25, 0.5, 0.8);
+      mossPatch2.position.set(0.36, 0.21, -0.02);
+      stick.add(branch, mossPatch1, mossPatch2);
+      const pos = getClusteredPosition(i + 47, 27);
+      stick.position.set(pos.x, pos.y, pos.z);
+      stick.rotation.y = Math.random() * Math.PI * 2;
+      const note = getModeNote(i + 3);
+      registerProp(stick, 'mossStick', note.freq * 0.68, note.noteName, `Mossy Stick (${note.name})`);
+    }
+
+    // --- I. Small Wildflowers (36 interactive blooms) ---
+    const flowerCount = 36;
+    for (let i = 0; i < flowerCount; i++) {
+      const flower = new THREE.Group();
+      const scale = 0.7 + Math.random() * 0.45;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.72 * scale, 5), flowerStemMat);
+      stem.position.y = 0.36 * scale;
+      const bloom = new THREE.Group();
+      const petalGeo = new THREE.SphereGeometry(0.105 * scale, 6, 5);
+      for (let p = 0; p < 5; p++) {
+        const angle = (p / 5) * Math.PI * 2;
+        const petal = new THREE.Mesh(petalGeo, flowerPetalMat);
+        petal.position.set(Math.cos(angle) * 0.16 * scale, 0, Math.sin(angle) * 0.16 * scale);
+        petal.scale.set(1.0, 0.58, 1.45);
+        bloom.add(petal);
+      }
+      const center = new THREE.Mesh(new THREE.SphereGeometry(0.09 * scale, 7, 6), flowerCenterMat);
+      bloom.add(center);
+      bloom.position.y = 0.76 * scale;
+      flower.add(stem, bloom);
+      const pos = getClusteredPosition(i + 61, 28);
+      flower.position.set(pos.x, pos.y, pos.z);
+      flower.rotation.y = Math.random() * Math.PI * 2;
+      const note = getModeNote(i + 6);
+      registerProp(flower, 'flower', note.freq * 1.65, note.noteName, `Forest Flower (${note.name})`);
     }
 
     // 8. Fireflies System (130+ particles)
@@ -925,6 +1005,18 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         case 'bush':
           audioEngine.triggerBushNoiseImpact(0.85);
           break;
+        case 'sapling':
+          // A softer woody tap with a gentle crystalline tail.
+          audioEngine.triggerTreeTap(prop.freq);
+          break;
+        case 'mossStick':
+          // A muted, low wooden knock.
+          audioEngine.triggerWoodDrum(prop.freq);
+          break;
+        case 'flower':
+          // A light, high-register bloom chime.
+          audioEngine.triggerChime(prop.freq, 0.58);
+          break;
       }
 
       onObjectPlayedRef.current?.(prop.type, prop.name, prop.freq, prop.noteName);
@@ -1326,6 +1418,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       bushMat.dispose();
       mushroomCapMat.dispose();
       mushroomStemMat.dispose();
+      saplingLeafMat.dispose();
+      mossMat.dispose();
+      flowerStemMat.dispose();
+      flowerPetalMat.dispose();
+      flowerCenterMat.dispose();
       sparkGeo.dispose();
       sparkMat.dispose();
       renderer.dispose();
