@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { ForestScene } from './components/ForestScene';
 import { ControlDock } from './components/ControlDock';
 import { EnterScreen } from './components/EnterScreen';
@@ -218,6 +219,8 @@ export default function App() {
       {!hasEntered && (
         <EnterScreen onEnter={handleEnter} currentTheme={currentTheme} />
       )}
+
+      <Analytics />
     </div>
   );
 }
