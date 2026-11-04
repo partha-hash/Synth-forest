@@ -381,7 +381,7 @@ export const DEFAULT_SYNTH_SETTINGS: SynthSettings = {
 };
 
 export interface ObjectPlayedEvent {
-  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'ground';
+  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower' | 'ground';
   label: string;
   noteName: string;
   frequency: number;
