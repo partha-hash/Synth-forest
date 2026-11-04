@@ -1,0 +1,6 @@
+{
+  "name": "redowan's synth forest",
+  "description": "you don't play you listen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
