@@ -6,7 +6,7 @@
  * - Two-Finger Sweep Gesture: swipe horizontally with 2 fingers to cycle biomes & DSP profiles
  * - UnrealBloomPass post-processing for lucid bioluminescent atmosphere
  * - Clustered dense mystical groves (Pines, Stumps, Logs, Stones, Bushes, Glowing Spore Mushrooms)
- * - Dynamic ground splash with omnidirectional point light flare, shockwaves & spark fountains
+ * - Stationary Ambient Wildlife with Proximity/Touch Chords & Organic Embedded Low-Cost Pond
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -75,13 +75,15 @@ interface ForestAnimal {
   label: string;
   anchorX: number;
   anchorZ: number;
-  roamRadius: number;
   zoneRadius: number;
   freq: number;
-  phase: number;
-  speed: number;
   wasInside: boolean;
   lastSoundAt: number;
+  character: number;
+  ears?: THREE.Object3D[];
+  head?: THREE.Object3D;
+  wings?: THREE.Object3D[];
+  antenna?: THREE.Object3D[];
 }
 
 const _moveDir = new THREE.Vector3();
@@ -182,14 +184,12 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     scene.add(dirLight);
 
     // 6. Circular Little-Planet Terrain
-    // Planet curvature radius: curves downward gracefully towards edge
     const planetRadius = 135;
-    const worldBoundRadius = 60; // Infinite wrap boundary
+    const worldBoundRadius = 60;
 
     const getLittlePlanetHeight = (x: number, z: number): number => {
       const distSq = x * x + z * z;
       const planetCurve = -distSq / (2 * planetRadius);
-      // Gentle natural hills undulating across the planet surface
       const hills =
         Math.sin(x * 0.06) * Math.cos(z * 0.06) * 2.2 +
         Math.sin(x * 0.025 + z * 0.02) * 2.8 +
@@ -243,7 +243,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     atmoRing.position.y = -20;
     scene.add(atmoRing);
 
-    // 7. Interactive Clustered Props (Clustered on the Little Planet)
+    // 7. Interactive Clustered Props
     const interactiveProps: InteractiveProp[] = [];
     const clickableMeshes: THREE.Object3D[] = [];
 
@@ -291,7 +291,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       roughness: 0.5,
     });
 
-    // Small forest-floor details: shared materials keep the added props lightweight.
     const saplingLeafMat = new THREE.MeshStandardMaterial({ color: 0x4f9b58, roughness: 0.82 });
     const mossMat = new THREE.MeshStandardMaterial({ color: 0x527d45, roughness: 1.0 });
     const flowerStemMat = new THREE.MeshStandardMaterial({ color: 0x4d8b48, roughness: 0.9 });
@@ -325,7 +324,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       });
     };
 
-    // Wildlife habitats and a shallow pond. Animals wander locally but never leave their habitat.
+    // Wildlife stationary habitats & ambient synthesizer setup
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
       cream: new THREE.MeshStandardMaterial({ color: 0xd8c6a4, roughness: 0.92 }),
@@ -340,37 +339,66 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     };
     const animalSphere = new THREE.SphereGeometry(1, 8, 6);
     const animalCone = new THREE.ConeGeometry(0.16, 0.55, 5);
-    const makeAnimal = (kind: ForestAnimal['kind'], x: number, z: number, freq: number, phase: number) => {
+
+    const makeAnimal = (
+      kind: ForestAnimal['kind'],
+      x: number,
+      z: number,
+      freq: number,
+      character: number
+    ) => {
       const group = new THREE.Group();
-      const addPart = (geo: THREE.BufferGeometry, mat: THREE.Material, px: number, py: number, pz: number, sx: number, sy: number, sz: number, rz = 0) => {
+      let ears: THREE.Object3D[] = [];
+      let head: THREE.Object3D | undefined;
+      let wings: THREE.Object3D[] = [];
+      let antenna: THREE.Object3D[] = [];
+
+      const addPart = (
+        geo: THREE.BufferGeometry,
+        mat: THREE.Material,
+        px: number, py: number, pz: number,
+        sx: number, sy: number, sz: number,
+        rz = 0
+      ) => {
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(px, py, pz); mesh.scale.set(sx, sy, sz); mesh.rotation.z = rz;
-        mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh;
+        mesh.position.set(px, py, pz);
+        mesh.scale.set(sx, sy, sz);
+        mesh.rotation.z = rz;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+        return mesh;
       };
+
       const eyes = (mat = animalMats.eye) => {
         addPart(animalSphere, mat, -0.19, 0.55, -0.34, 0.055, 0.065, 0.04);
         addPart(animalSphere, mat, 0.19, 0.55, -0.34, 0.055, 0.065, 0.04);
       };
+
       if (kind === 'bunny') {
         addPart(animalSphere, animalMats.cream, 0, 0.35, 0, 0.34, 0.29, 0.48);
-        addPart(animalSphere, animalMats.cream, 0, 0.62, -0.34, 0.27, 0.27, 0.27);
-        addPart(animalSphere, animalMats.cream, -0.13, 1.0, -0.37, 0.09, 0.36, 0.09, -0.12);
-        addPart(animalSphere, animalMats.cream, 0.13, 1.0, -0.37, 0.09, 0.36, 0.09, 0.12); eyes();
+        head = addPart(animalSphere, animalMats.cream, 0, 0.62, -0.34, 0.27, 0.27, 0.27);
+        const earL = addPart(animalSphere, animalMats.cream, -0.13, 1.0, -0.37, 0.09, 0.36, 0.09, -0.12);
+        const earR = addPart(animalSphere, animalMats.cream, 0.13, 1.0, -0.37, 0.09, 0.36, 0.09, 0.12);
+        ears = [earL, earR];
+        eyes();
       } else if (kind === 'deer') {
         addPart(animalSphere, animalMats.tan, 0, 0.55, 0.05, 0.34, 0.42, 0.62);
-        addPart(animalSphere, animalMats.tan, 0, 0.88, -0.42, 0.2, 0.27, 0.23);
+        head = addPart(animalSphere, animalMats.tan, 0, 0.88, -0.42, 0.2, 0.27, 0.23);
         addPart(animalSphere, animalMats.dark, 0, 0.8, -0.62, 0.12, 0.1, 0.1);
         for (const s of [-1, 1]) {
           addPart(animalSphere, animalMats.tan, s * 0.2, 0.35, -0.02, 0.09, 0.34, 0.09);
           addPart(animalCone, animalMats.gold, s * 0.13, 1.2, -0.4, 0.45, 0.65, 0.45, s * -0.25);
           addPart(animalCone, animalMats.gold, s * 0.34, 1.28, -0.4, 0.28, 0.48, 0.28, s * 0.35);
-        } eyes(animalMats.eye);
+        }
+        eyes(animalMats.eye);
       } else if (kind === 'bear') {
         addPart(animalSphere, animalMats.brown, 0, 0.48, 0.02, 0.48, 0.48, 0.52);
-        addPart(animalSphere, animalMats.brown, 0, 0.88, -0.36, 0.34, 0.33, 0.3);
+        head = addPart(animalSphere, animalMats.brown, 0, 0.88, -0.36, 0.34, 0.33, 0.3);
         addPart(animalSphere, animalMats.brown, -0.26, 1.13, -0.37, 0.13, 0.13, 0.12);
         addPart(animalSphere, animalMats.brown, 0.26, 1.13, -0.37, 0.13, 0.13, 0.12);
-        addPart(animalSphere, animalMats.cream, 0, 0.78, -0.62, 0.19, 0.14, 0.12); eyes();
+        addPart(animalSphere, animalMats.cream, 0, 0.78, -0.62, 0.19, 0.14, 0.12);
+        eyes();
       } else if (kind === 'frog') {
         addPart(animalSphere, animalMats.green, 0, 0.22, 0, 0.4, 0.22, 0.34);
         addPart(animalSphere, animalMats.green, -0.23, 0.45, -0.18, 0.15, 0.16, 0.15);
@@ -380,81 +408,186 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       } else if (kind === 'owl' || kind === 'nightAngel' || kind === 'asianCuckoo') {
         const bodyMat = kind === 'owl' ? animalMats.tan : (kind === 'nightAngel' ? animalMats.glow : animalMats.brown);
         addPart(animalSphere, bodyMat, 0, 0.58, 0, 0.32, 0.43, 0.3);
-        addPart(animalSphere, bodyMat, 0, 0.9, -0.12, 0.28, 0.27, 0.25);
+        head = addPart(animalSphere, bodyMat, 0, 0.9, -0.12, 0.28, 0.27, 0.25);
         addPart(animalSphere, animalMats.white, -0.13, 0.91, -0.34, 0.12, 0.13, 0.05);
         addPart(animalSphere, animalMats.white, 0.13, 0.91, -0.34, 0.12, 0.13, 0.05);
         eyes();
         addPart(animalCone, animalMats.gold, 0, 0.75, -0.39, 0.45, 0.45, 0.45);
-        addPart(animalSphere, bodyMat, -0.33, 0.58, 0, 0.28, 0.12, 0.22, -0.22);
-        addPart(animalSphere, bodyMat, 0.33, 0.58, 0, 0.28, 0.12, 0.22, 0.22);
+        const wL = addPart(animalSphere, bodyMat, -0.33, 0.58, 0, 0.28, 0.12, 0.22, -0.22);
+        const wR = addPart(animalSphere, bodyMat, 0.33, 0.58, 0, 0.28, 0.12, 0.22, 0.22);
+        wings = [wL, wR];
       } else if (kind === 'cricket') {
         addPart(animalSphere, animalMats.green, 0, 0.18, 0, 0.16, 0.12, 0.34);
         addPart(animalSphere, animalMats.green, 0, 0.24, -0.28, 0.12, 0.1, 0.12);
+        const a1 = addPart(animalCone, animalMats.green, -0.06, 0.38, -0.32, 0.06, 0.4, 0.06, -0.2);
+        const a2 = addPart(animalCone, animalMats.green, 0.06, 0.38, -0.32, 0.06, 0.4, 0.06, 0.2);
+        antenna = [a1, a2];
         for (const s of [-1, 1]) {
           addPart(animalCone, animalMats.green, s * 0.18, 0.13, 0.02, 0.35, 0.5, 0.35, s * 0.8);
           addPart(animalCone, animalMats.green, s * 0.16, 0.2, -0.22, 0.18, 0.5, 0.18, s * -0.5);
         }
       }
+
       const y = getLittlePlanetHeight(x, z);
       group.position.set(x, y, z);
+      group.userData = { isAnimal: true, kind, freq, character };
       scene.add(group);
+
       const names: Record<ForestAnimal['kind'], string> = {
         bunny: 'Forest Bunny', deer: 'Grove Deer', bear: 'Woodland Bear', frog: 'Pond Frogs',
         owl: 'Moonlit Owl', nightAngel: 'Night Angel', asianCuckoo: 'Asian Cuckoo', cricket: 'Forest Crickets',
       };
-      forestAnimals.push({ group, kind, label: names[kind], anchorX: x, anchorZ: z,
-        roamRadius: kind === 'bear' || kind === 'deer' ? 3.8 : 2.6,
-        zoneRadius: kind === 'cricket' ? 7.5 : 8.5, freq, phase, speed: 0.22 + (phase % 4) * 0.035,
-        wasInside: false, lastSoundAt: -100 });
-    };
-    // Separate, bounded habitats around the planet.
-    makeAnimal('bunny', -16, -18, 392, 0.3);
-    makeAnimal('deer', 24, -24, 293.66, 1.2);
-    makeAnimal('bear', -27, 20, 196, 2.1);
-    makeAnimal('frog', 14, -7, 523.25, 2.8);
-    makeAnimal('owl', 0, -35, 349.23, 3.6);
-    makeAnimal('nightAngel', -2, 35, 587.33, 4.4);
-    makeAnimal('asianCuckoo', 27, 25, 440, 5.1);
-    makeAnimal('cricket', -27, -23, 659.25, 5.8);
 
-    // Shallow enchanted pool with a solid no-entry boundary.
+      forestAnimals.push({
+        group, kind, label: names[kind], anchorX: x, anchorZ: z,
+        zoneRadius: kind === 'cricket' ? 7.5 : 8.5, freq,
+        wasInside: false, lastSoundAt: -100, character,
+        ears, head, wings, antenna
+      });
+    };
+
+    // Instantiate 8 stationary animals
+    makeAnimal('bunny', -16, -18, 392, 0);
+    makeAnimal('deer', 24, -24, 293.66, 1);
+    makeAnimal('bear', -27, 20, 196, 2);
+    makeAnimal('frog', 14, -7, 523.25, 3);
+    makeAnimal('owl', 0, -35, 349.23, 4);
+    makeAnimal('nightAngel', -2, 35, 587.33, 5);
+    makeAnimal('asianCuckoo', 27, 25, 440, 6);
+    makeAnimal('cricket', -27, -23, 659.25, 7);
+
+    // Optimized Organic Pond Setup
     const pondCenter = new THREE.Vector2(14, -7);
-    const pondRadius = 5.4;
-    const pondCollisionRadius = 5.85;
     const pondY = getLittlePlanetHeight(pondCenter.x, pondCenter.y);
-    const pondWaterMat = new THREE.MeshPhysicalMaterial({ color: 0x286f82, roughness: 0.18, metalness: 0.25,
-      transparent: true, opacity: 0.84, clearcoat: 0.9, clearcoatRoughness: 0.12, side: THREE.DoubleSide });
-    const pondWater = new THREE.Mesh(new THREE.CircleGeometry(pondRadius, 48), pondWaterMat);
-    pondWater.rotation.x = -Math.PI / 2; pondWater.position.set(pondCenter.x, pondY + 0.08, pondCenter.y);
+    const pondRadiusBase = 5.4;
+
+    // Organic non-circular shape using 16 polar boundary points
+    const pondVerticesCount = 16;
+    const pondBoundaryPoints: THREE.Vector2[] = [];
+    for (let i = 0; i < pondVerticesCount; i++) {
+      const angle = (i / pondVerticesCount) * Math.PI * 2;
+      const radiusOffset = Math.sin(angle * 3) * 0.75 + Math.cos(angle * 2) * 0.5;
+      const r = pondRadiusBase + radiusOffset;
+      const px = pondCenter.x + Math.cos(angle) * r;
+      const pz = pondCenter.y + Math.sin(angle) * r;
+      pondBoundaryPoints.push(new THREE.Vector2(px, pz));
+    }
+
+    // Organic Pond Shape
+    const pondShape = new THREE.Shape();
+    pondBoundaryPoints.forEach((pt, idx) => {
+      const localX = pt.x - pondCenter.x;
+      const localZ = pt.y - pondCenter.y;
+      if (idx === 0) pondShape.moveTo(localX, localZ);
+      else pondShape.lineTo(localX, localZ);
+    });
+
+    const pondGeo = new THREE.ShapeGeometry(pondShape, 24);
+    const posPond = pondGeo.attributes.position;
+    const colors = new Float32Array(posPond.count * 3);
+
+    const cCenter = new THREE.Color(0x133d47);
+    const cEdge = new THREE.Color(0x286f82);
+
+    for (let i = 0; i < posPond.count; i++) {
+      const vx = posPond.getX(i);
+      const vz = posPond.getY(i);
+      const distFromCenter = Math.hypot(vx, vz) / pondRadiusBase;
+      const alpha = Math.min(1, Math.max(0, distFromCenter));
+      const vertexColor = cCenter.clone().lerp(cEdge, alpha);
+      colors[i * 3] = vertexColor.r;
+      colors[i * 3 + 1] = vertexColor.g;
+      colors[i * 3 + 2] = vertexColor.b;
+    }
+    pondGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const pondWaterMat = new THREE.MeshStandardMaterial({
+      roughness: 0.15,
+      metalness: 0.10,
+      transparent: true,
+      opacity: 0.85,
+      vertexColors: true,
+      side: THREE.DoubleSide,
+    });
+
+    const pondWater = new THREE.Mesh(pondGeo, pondWaterMat);
+    pondWater.rotation.x = -Math.PI / 2;
+    pondWater.position.set(pondCenter.x, pondY + 0.05, pondCenter.y);
     scene.add(pondWater);
-    const pondEdge = new THREE.Mesh(new THREE.TorusGeometry(pondRadius, 0.22, 7, 56),
-      new THREE.MeshStandardMaterial({ color: 0x496b4b, roughness: 0.95 }));
-    pondEdge.rotation.x = Math.PI / 2; pondEdge.position.set(pondCenter.x, pondY + 0.1, pondCenter.y); scene.add(pondEdge);
+
+    // Earthy Moss Shoreline Ring
+    const shoreGeo = new THREE.ShapeGeometry(pondShape);
+    const shoreMat = new THREE.MeshStandardMaterial({
+      color: 0x3d543b,
+      roughness: 0.95,
+      wireframe: true,
+    });
+    const shoreRing = new THREE.Mesh(shoreGeo, shoreMat);
+    shoreRing.rotation.x = -Math.PI / 2;
+    shoreRing.position.set(pondCenter.x, pondY + 0.06, pondCenter.y);
+    shoreRing.scale.set(1.05, 1.05, 1.05);
+    scene.add(shoreRing);
+
+    // Pond Plants (Lotus & Cattails)
     const lotusMat = new THREE.MeshStandardMaterial({ color: 0x477f62, roughness: 0.75, side: THREE.DoubleSide });
     const lotusPetalMat = new THREE.MeshStandardMaterial({ color: 0xe9a9cf, emissive: 0x5c294b, emissiveIntensity: 0.18, roughness: 0.55, side: THREE.DoubleSide });
     const cattailMat = new THREE.MeshStandardMaterial({ color: 0x6e8a4d, roughness: 0.9 });
     const cattailHeadMat = new THREE.MeshStandardMaterial({ color: 0x79513b, roughness: 0.9 });
     const pondPlants: { group: THREE.Group; freq: number; phase: number; type: 'lotus' | 'cattail' }[] = [];
+
     const addPondPlant = (x: number, z: number, type: 'lotus' | 'cattail', freq: number, phase: number) => {
       const g = new THREE.Group();
       if (type === 'lotus') {
-        const pad = new THREE.Mesh(new THREE.CircleGeometry(0.62, 9), lotusMat); pad.rotation.x = -Math.PI / 2; pad.position.y = 0.16; g.add(pad);
+        const pad = new THREE.Mesh(new THREE.CircleGeometry(0.62, 9), lotusMat);
+        pad.rotation.x = -Math.PI / 2;
+        pad.position.y = 0.16;
+        g.add(pad);
         const flower = new THREE.Group();
-        for (let i = 0; i < 7; i++) { const a = i * Math.PI * 2 / 7; const p = new THREE.Mesh(new THREE.SphereGeometry(0.18, 7, 5), lotusPetalMat);
-          p.position.set(Math.cos(a) * 0.19, 0.39, Math.sin(a) * 0.19); p.scale.set(0.7, 1.0, 0.55); flower.add(p); }
-        const center = new THREE.Mesh(new THREE.SphereGeometry(0.1, 7, 5), animalMats.gold); center.position.y = 0.4; flower.add(center); g.add(flower);
+        for (let i = 0; i < 7; i++) {
+          const a = (i * Math.PI * 2) / 7;
+          const p = new THREE.Mesh(new THREE.SphereGeometry(0.18, 7, 5), lotusPetalMat);
+          p.position.set(Math.cos(a) * 0.19, 0.39, Math.sin(a) * 0.19);
+          p.scale.set(0.7, 1.0, 0.55);
+          flower.add(p);
+        }
+        const center = new THREE.Mesh(new THREE.SphereGeometry(0.1, 7, 5), animalMats.gold);
+        center.position.y = 0.4;
+        flower.add(center);
+        g.add(flower);
       } else {
-        for (let i = 0; i < 3; i++) { const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.2 + i * 0.15, 5), cattailMat);
-          stem.position.set((i - 1) * 0.2, 0.68, 0); stem.rotation.z = (i - 1) * 0.12; g.add(stem);
-          const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.38, 6), cattailHeadMat); head.position.set((i - 1) * 0.2, 1.42 + i * 0.15, 0); g.add(head); }
+        for (let i = 0; i < 3; i++) {
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.2 + i * 0.15, 5), cattailMat);
+          stem.position.set((i - 1) * 0.2, 0.68, 0);
+          stem.rotation.z = (i - 1) * 0.12;
+          g.add(stem);
+          const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.38, 6), cattailHeadMat);
+          head.position.set((i - 1) * 0.2, 1.42 + i * 0.15, 0);
+          g.add(head);
+        }
       }
-      g.position.set(x, pondY, z); scene.add(g); pondPlants.push({ group: g, freq, phase, type });
+      g.position.set(x, pondY, z);
+      scene.add(g);
+      pondPlants.push({ group: g, freq, phase, type });
     };
+
     addPondPlant(12.0, -5.6, 'lotus', 659.25, 0.2);
     addPondPlant(15.5, -8.2, 'lotus', 783.99, 1.1);
     addPondPlant(16.2, -4.7, 'lotus', 587.33, 2.0);
     addPondPlant(10.2, -8.8, 'cattail', 261.63, 2.8);
     addPondPlant(18.1, -7.5, 'cattail', 293.66, 3.5);
+
+    // 2D Polygon Point-In-Polygon Collision Checker for Irregular Pond Edge
+    const isPointInPolygon = (pt: THREE.Vector2, poly: THREE.Vector2[]) => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i].x, yi = poly[i].y;
+        const xj = poly[j].x, yj = poly[j].y;
+        const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+            (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
 
     // 6 Clustered Little-Planet Grove Coordinates
     const groveCenters = [
@@ -475,7 +608,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       return { x, z, y: getLittlePlanetHeight(x, z) };
     };
 
-    // --- A. Clustered Crystal Pines (68+ trees) ---
+    // --- A. Clustered Crystal Pines ---
     const pineCount = 68;
     for (let i = 0; i < pineCount; i++) {
       const treeGroup = new THREE.Group();
@@ -515,7 +648,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.name})`, topper);
     }
 
-    // --- B. Bioluminescent Spore Mushrooms (26+ glowing mushrooms with 4 sound varieties) ---
+    // --- B. Bioluminescent Spore Mushrooms ---
     const mushroomCount = 26;
     const mushroomSubtypeNames = [
       'Liquid Bubble Spore',
@@ -564,7 +697,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       );
     }
 
-    // --- C. Wood Stumps (26+ stumps) ---
+    // --- C. Wood Stumps ---
     const stumpCount = 26;
     for (let i = 0; i < stumpCount; i++) {
       const stumpGroup = new THREE.Group();
@@ -584,7 +717,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(stumpGroup, 'stump', note.freq * 0.72, note.noteName, `Wood Tongue Drum (${note.name})`);
     }
 
-    // --- D. Fallen Marimba Logs (22+ logs) ---
+    // --- D. Fallen Marimba Logs ---
     const logCount = 22;
     for (let i = 0; i < logCount; i++) {
       const logGroup = new THREE.Group();
@@ -610,7 +743,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(logGroup, 'log', note.freq * 0.88, note.noteName, `Marimba Log (${note.name})`);
     }
 
-    // --- E. Lithophone Mineral Stones (28+ stones) ---
+    // --- E. Lithophone Mineral Stones ---
     const stoneCount = 28;
     for (let i = 0; i < stoneCount; i++) {
       const stoneGroup = new THREE.Group();
@@ -633,7 +766,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(stoneGroup, 'stone', note.freq * 1.55, note.noteName, `Mineral Stone (${note.name})`);
     }
 
-    // --- F. Foliage Bushes (38+ bushes) ---
+    // --- F. Foliage Bushes ---
     const bushCount = 38;
     for (let i = 0; i < bushCount; i++) {
       const bushGroup = new THREE.Group();
@@ -654,8 +787,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(bushGroup, 'bush', 850, 'Rustle', `Foliage Bush #${i + 1}`);
     }
 
-    // --- G. Tiny Saplings (24 interactive young trees) ---
-    // Kept deliberately shorter and more delicate than the main crystal pines.
+    // --- G. Tiny Saplings ---
     const saplingCount = 24;
     for (let i = 0; i < saplingCount; i++) {
       const sapling = new THREE.Group();
@@ -676,7 +808,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(sapling, 'sapling', note.freq * 0.82, note.noteName, `Young Sapling (${note.name})`);
     }
 
-    // --- H. Moss-Covered Sticks (30 small, playable forest-floor pieces) ---
+    // --- H. Moss-Covered Sticks ---
     const mossStickCount = 30;
     for (let i = 0; i < mossStickCount; i++) {
       const stick = new THREE.Group();
@@ -698,7 +830,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(stick, 'mossStick', note.freq * 0.68, note.noteName, `Mossy Stick (${note.name})`);
     }
 
-    // --- I. Small Wildflowers (36 interactive blooms) ---
+    // --- I. Small Wildflowers ---
     const flowerCount = 36;
     for (let i = 0; i < flowerCount; i++) {
       const flower = new THREE.Group();
@@ -725,7 +857,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(flower, 'flower', note.freq * 1.65, note.noteName, `Forest Flower (${note.name})`);
     }
 
-    // 8. Fireflies System (130+ particles)
+    // 8. Fireflies System
     const fireflyCount = 130;
     const fireflyGeo = new THREE.BufferGeometry();
     const fireflyPositions = new Float32Array(fireflyCount * 3);
@@ -741,11 +873,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       fireflyPositions[i * 3 + 1] = y;
       fireflyPositions[i * 3 + 2] = z;
       fireflyBaseData.push({
-        x,
-        y,
-        z,
-        seed: Math.random() * 100,
-        speed: 0.7 + Math.random() * 1.1,
+        x, y, z, seed: Math.random() * 100, speed: 0.7 + Math.random() * 1.1,
       });
     }
     fireflyGeo.setAttribute('position', new THREE.BufferAttribute(fireflyPositions, 3));
@@ -760,7 +888,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const fireflyPoints = new THREE.Points(fireflyGeo, fireflyMat);
     scene.add(fireflyPoints);
 
-    // 9. Floating Celestial Spores (180+ particles)
+    // 9. Floating Celestial Spores
     const sporeCount = 180;
     const sporeGeo = new THREE.BufferGeometry();
     const sporePositions = new Float32Array(sporeCount * 3);
@@ -776,11 +904,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       sporePositions[i * 3 + 1] = y;
       sporePositions[i * 3 + 2] = z;
       sporeData.push({
-        x,
-        y,
-        z,
-        speed: 0.18 + Math.random() * 0.35,
-        seed: Math.random() * 100,
+        x, y, z, speed: 0.18 + Math.random() * 0.35, seed: Math.random() * 100,
       });
     }
     sporeGeo.setAttribute('position', new THREE.BufferAttribute(sporePositions, 3));
@@ -795,53 +919,39 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const sporePoints = new THREE.Points(sporeGeo, sporeMat);
     scene.add(sporePoints);
 
-    // 10. Strengthened Ground Splash Systems
+    // 10. Ground Splash Systems
     const shockwaves: ShockwaveRing[] = [];
     const splashLights: SplashPointLight[] = [];
     const splashSparks: SplashSpark[] = [];
 
     const sparkMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 1.0,
-      depthWrite: false,
+      color: 0xffffff, transparent: true, opacity: 1.0, depthWrite: false,
     });
     const sparkGeo = new THREE.SphereGeometry(0.12, 4, 4);
 
     const triggerGroundSplashEffect = (x: number, y: number, z: number, colorHex: number) => {
-      // Concentric rings
       for (let s = 0; s < 2; s++) {
         const ringGeo = new THREE.RingGeometry(0.2, 0.55, 32);
         ringGeo.rotateX(-Math.PI / 2);
         const ringMat = new THREE.MeshBasicMaterial({
-          color: colorHex,
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.95 - s * 0.25,
-          depthWrite: false,
+          color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.95 - s * 0.25, depthWrite: false,
         });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
         ringMesh.position.set(x, y + 0.08 + s * 0.02, z);
         scene.add(ringMesh);
 
         shockwaves.push({
-          mesh: ringMesh,
-          maxRadius: 8.5 + s * 2.5,
-          progress: -s * 0.12,
+          mesh: ringMesh, maxRadius: 8.5 + s * 2.5, progress: -s * 0.12,
         });
       }
 
-      // PointLight flare
       const splashLight = new THREE.PointLight(colorHex, 4.5, 18);
       splashLight.position.set(x, y + 1.2, z);
       scene.add(splashLight);
       splashLights.push({
-        light: splashLight,
-        initialIntensity: 4.5,
-        timer: 1.0,
+        light: splashLight, initialIntensity: 4.5, timer: 1.0,
       });
 
-      // Sparks
       for (let i = 0; i < 16; i++) {
         const sparkMesh = new THREE.Mesh(sparkGeo, sparkMat.clone());
         sparkMesh.position.set(x, y + 0.3, z);
@@ -852,34 +962,17 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         const upSpeed = 3.5 + Math.random() * 4.0;
         splashSparks.push({
           mesh: sparkMesh,
-          velocity: new THREE.Vector3(
-            Math.cos(angle) * speed,
-            upSpeed,
-            Math.sin(angle) * speed
-          ),
+          velocity: new THREE.Vector3(Math.cos(angle) * speed, upSpeed, Math.sin(angle) * speed),
           life: 1.0,
         });
       }
     };
 
-    // 11. Two-Finger Long Vertical Swipe Gesture Recognition (Swipe Up / Down to Cycle Biomes)
-    // Specifically engineered to prevent accidental triggers while playing with forest trees:
-    // Requires both fingers to travel a long vertical distance (>=130px) in parallel in the same direction.
+    // 11. Two-Finger Long Vertical Swipe Gesture Recognition
     interface TwoTouchRecord {
-      id0: number;
-      id1: number;
-      startY0: number;
-      startY1: number;
-      startX0: number;
-      startX1: number;
-      currentY0: number;
-      currentY1: number;
-      currentX0: number;
-      currentX1: number;
-      initialSpan: number;
-      startTime: number;
-      hasMoved: boolean;
-      isValid: boolean;
+      id0: number; id1: number; startY0: number; startY1: number; startX0: number; startX1: number;
+      currentY0: number; currentY1: number; currentX0: number; currentX1: number;
+      initialSpan: number; startTime: number; hasMoved: boolean; isValid: boolean;
     }
 
     let activeTwoTouch: TwoTouchRecord | null = null;
@@ -893,20 +986,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         const span = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
 
         activeTwoTouch = {
-          id0: t0.identifier,
-          id1: t1.identifier,
-          startY0: t0.clientY,
-          startY1: t1.clientY,
-          startX0: t0.clientX,
-          startX1: t1.clientX,
-          currentY0: t0.clientY,
-          currentY1: t1.clientY,
-          currentX0: t0.clientX,
-          currentX1: t1.clientX,
-          initialSpan: span,
-          startTime: performance.now(),
-          hasMoved: false,
-          isValid: true,
+          id0: t0.identifier, id1: t1.identifier, startY0: t0.clientY, startY1: t1.clientY,
+          startX0: t0.clientX, startX1: t1.clientX, currentY0: t0.clientY, currentY1: t1.clientY,
+          currentX0: t0.clientX, currentX1: t1.clientX, initialSpan: span, startTime: performance.now(),
+          hasMoved: false, isValid: true,
         };
         lastTwoFingerGestureTime = Date.now();
       } else {
@@ -927,13 +1010,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         return;
       }
 
-      activeTwoTouch.currentX0 = t0.clientX;
-      activeTwoTouch.currentY0 = t0.clientY;
-      activeTwoTouch.currentX1 = t1.clientX;
-      activeTwoTouch.currentY1 = t1.clientY;
+      activeTwoTouch.currentX0 = t0.clientX; activeTwoTouch.currentY0 = t0.clientY;
+      activeTwoTouch.currentX1 = t1.clientX; activeTwoTouch.currentY1 = t1.clientY;
       activeTwoTouch.hasMoved = true;
 
-      // Reject if distance between the two fingers changes drastically (pinch-zoom or tapping 2 distant trees)
       const currentSpan = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
       if (Math.abs(currentSpan - activeTwoTouch.initialSpan) > 95) {
         activeTwoTouch.isValid = false;
@@ -944,7 +1024,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       if (!activeTwoTouch) return;
       lastTwoFingerGestureTime = Date.now();
 
-      // Only evaluate if fingers stayed valid and actively moved
       if (activeTwoTouch.isValid && activeTwoTouch.hasMoved) {
         const dy0 = activeTwoTouch.currentY0 - activeTwoTouch.startY0;
         const dy1 = activeTwoTouch.currentY1 - activeTwoTouch.startY1;
@@ -954,20 +1033,15 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         const avgDY = (dy0 + dy1) / 2;
         const avgDX = (dx0 + dx1) / 2;
 
-        // Long swipe threshold: minimum 130px displacement for each finger and average
         const LONG_SWIPE_MIN_DISTANCE = 130;
         const hasLongTravel =
           Math.abs(dy0) >= LONG_SWIPE_MIN_DISTANCE &&
           Math.abs(dy1) >= LONG_SWIPE_MIN_DISTANCE &&
           Math.abs(avgDY) >= LONG_SWIPE_MIN_DISTANCE;
 
-        // Both fingers must swipe in the same vertical direction (parallel motion)
         const isParallel = Math.sign(dy0) === Math.sign(dy1);
-
-        // Strict vertical dominance (> 2.0x horizontal drift)
         const isStrictlyVertical = Math.abs(avgDY) > Math.abs(avgDX) * 2.0;
 
-        // Debounce cooldown (prevent bouncing)
         const now = Date.now();
         const canShift = now - lastBiomeShiftTime > 800;
 
@@ -976,10 +1050,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           const currentIndex = THEME_KEYS_ORDER.indexOf(themeRef.current);
           let nextIndex: number;
           if (avgDY < 0) {
-            // Long swipe up -> next biome
             nextIndex = (currentIndex + 1) % THEME_KEYS_ORDER.length;
           } else {
-            // Long swipe down -> previous biome
             nextIndex = (currentIndex - 1 + THEME_KEYS_ORDER.length) % THEME_KEYS_ORDER.length;
           }
           const nextTheme = THEME_KEYS_ORDER[nextIndex];
@@ -1018,7 +1090,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       if (['input', 'textarea'].includes((e.target as HTMLElement)?.tagName?.toLowerCase())) return;
       keysDown[e.code] = true;
 
-      // Tap tree with 'T' or 'E'
       if (e.code === 'KeyT' || e.code === 'KeyE') {
         tapNearestTree();
       }
@@ -1043,8 +1114,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     window.addEventListener('keyup', onKeyUp);
 
     // Mouse / Touch Look Dragging
-    // On mobile, the left side controls walking while a second finger on the
-    // right side can look around at the same time.
     let isMouseDragging = false;
     let lookTouchId: number | null = null;
     let prevPointerX = 0;
@@ -1072,8 +1141,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
 
       if ('touches' in e) {
-        // Pick a newly-started finger on the right 35% for free look.
-        // This also works while the first finger is holding the left joystick.
         const lookTouch = Array.from(e.changedTouches).find(
           touch => touch.clientX >= window.innerWidth * 0.65
         );
@@ -1119,7 +1186,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     window.addEventListener('touchend', onPointerUp, { passive: true });
     window.addEventListener('touchcancel', onPointerUp, { passive: true });
 
-    // 12. Sound Triggering on Prop Click
+    // 12. Sound Triggering on Prop Click & Animal Touch
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
@@ -1156,15 +1223,12 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           audioEngine.triggerBushNoiseImpact(0.85);
           break;
         case 'sapling':
-          // A softer woody tap with a gentle crystalline tail.
           audioEngine.triggerTreeTap(prop.freq);
           break;
         case 'mossStick':
-          // A muted, low wooden knock.
           audioEngine.triggerWoodDrum(prop.freq);
           break;
         case 'flower':
-          // A light, high-register bloom chime.
           audioEngine.triggerChime(prop.freq, 0.58);
           break;
       }
@@ -1203,6 +1267,24 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       pointer.y = -(clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
 
+      // Animal Raycast Detection
+      const animalHits = raycaster.intersectObjects(
+        forestAnimals.map((animal) => animal.group),
+        true
+      );
+      if (animalHits.length > 0) {
+        let root: THREE.Object3D | null = animalHits[0].object;
+        while (root && !forestAnimals.some((a) => a.group === root) && root.parent) {
+          root = root.parent;
+        }
+        const animal = forestAnimals.find((a) => a.group === root);
+        if (animal) {
+          audioEngine.triggerAnimalChord(animal.freq, animal.character);
+          return;
+        }
+      }
+
+      // Prop Raycast Detection
       const intersects = raycaster.intersectObjects(clickableMeshes, true);
       if (intersects.length > 0) {
         let top: THREE.Object3D | null = intersects[0].object;
@@ -1218,7 +1300,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         }
       }
 
-      // Lotus and cattails are individually playable; the water itself is not walkable.
+      // Pond Plants Raycast
       const plantHits = raycaster.intersectObjects(pondPlants.map((p) => p.group), true);
       if (plantHits.length > 0) {
         let root: THREE.Object3D | null = plantHits[0].object;
@@ -1227,6 +1309,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         if (plant) { triggerNaturePad(plant.freq, plant.type === 'lotus' ? 1 : 2); return; }
       }
 
+      // Ground Splash Raycast
       const groundHit = raycaster.intersectObject(terrainMesh);
       if (groundHit.length > 0) {
         const pt = groundHit[0].point;
@@ -1239,16 +1322,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     const onSceneClick = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
-      // Ignore the synthetic click that some browsers emit after our multi-touch tap handler.
       if (Date.now() - lastTouchTapTime < 500) return;
-      // Prevent clicks immediately following multi-touch gestures (e.g. lifting fingers from swipe).
       if (Date.now() - lastTwoFingerGestureTime < 450) return;
       performSceneInteraction(e.clientX, e.clientY);
     };
 
-    // A browser often does not dispatch a normal click when one finger is still
-    // holding the walking joystick. Detect a short, stationary second-finger tap
-    // and raycast it directly so trees, mushrooms, stones and the ground remain playable.
     type SceneTouchTap = { x: number; y: number; startX: number; startY: number; startedAt: number; moved: boolean; eligible: boolean };
     const sceneTouchTaps = new Map<number, SceneTouchTap>();
     let lastTouchTapTime = 0;
@@ -1258,7 +1336,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const onSceneTouchStart = (e: TouchEvent) => {
       if (isSceneControl(e.target)) return;
       Array.from(e.changedTouches).forEach((touch) => {
-        // The right side is reserved for free-look and for tapping playable props.
         const eligible = touch.clientX >= window.innerWidth * 0.65;
         sceneTouchTaps.set(touch.identifier, {
           x: touch.clientX, y: touch.clientY,
@@ -1289,8 +1366,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         sceneTouchTaps.delete(touch.identifier);
         const duration = performance.now() - tap.startedAt;
         const stayedStill = !tap.moved && Math.hypot(touch.clientX - tap.startX, touch.clientY - tap.startY) <= 14;
-        // Only fire while another finger remains down: this is specifically the
-        // second-finger interaction used to play objects while continuing to walk.
         if (tap.eligible && stayedStill && duration <= 700 && e.touches.length > 0) {
           lastTouchTapTime = Date.now();
           performSceneInteraction(touch.clientX, touch.clientY);
@@ -1315,7 +1390,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     };
     window.addEventListener('resize', onResize);
 
-    // 14. Main Animation & Render Loop (With Planet Continuous Toroidal Wrap)
+    // 14. Main Animation & Render Loop
     let animFrameId = 0;
     const clock = new THREE.Clock();
     const autoPropTriggers = new Map<InteractiveProp, number>();
@@ -1355,13 +1430,12 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       dirLight.intensity = 1.6 + audioEnergy * 2.0;
       wireMat.opacity = 0.42 + audioEnergy * 0.48;
 
-      // 1st-Person Movement with Keyboard & Virtual Joystick OR Auto Explore Roaming
+      // 1st-Person Movement with Keyboard & Virtual Joystick OR Auto Explore
       _moveDir.set(0, 0, 0);
 
       const isAutoExplore = autoExploreRef.current;
 
       if (isAutoExplore) {
-        // Autonomous continuous smooth roaming across little planet
         cameraYaw += (Math.sin(elapsed * 0.35) * 0.45 + Math.cos(elapsed * 0.17) * 0.25) * delta;
         cameraPitch = THREE.MathUtils.damp(cameraPitch, Math.sin(elapsed * 0.5) * 0.05, 2.5, delta);
         camera.rotation.set(0, 0, 0);
@@ -1369,10 +1443,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         camera.rotation.y = cameraYaw;
         camera.rotation.x = cameraPitch;
 
-        // Auto move forward in facing direction
         _moveDir.z -= 1.0;
 
-        // Proximity Prop Interactivity: Automatically play nearby nature instruments while roaming!
         const playerPos = camera.position;
         for (const prop of interactiveProps) {
           const dist = prop.group.position.distanceTo(playerPos);
@@ -1385,7 +1457,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           }
         }
 
-        // Periodic Biome & Melody Randomization during Auto Explore
         if (elapsed - lastAutoRandomizeTime > 24.0) {
           lastAutoRandomizeTime = elapsed;
           audioEngine.randomizeBiomeMelody(themeRef.current);
@@ -1408,14 +1479,15 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         _euler.set(0, cameraYaw, 0, 'YXZ');
         _moveDir.applyEuler(_euler);
 
-        // Slow, meditative lucid dream gliding pace
         const walkSpeed = isAutoExplore ? 2.1 : 2.4;
         const previousX = camera.position.x;
         const previousZ = camera.position.z;
         const nextX = previousX + _moveDir.x * walkSpeed * delta;
         const nextZ = previousZ + _moveDir.z * walkSpeed * delta;
-        // The pond has a firm shoreline: reject movement into the water, but allow walking around it.
-        if (Math.hypot(nextX - pondCenter.x, nextZ - pondCenter.y) >= pondCollisionRadius) {
+
+        // Polygon Shoreline Collision Enforcement
+        const nextPos = new THREE.Vector2(nextX, nextZ);
+        if (!isPointInPolygon(nextPos, pondBoundaryPoints)) {
           camera.position.x = nextX;
           camera.position.z = nextZ;
         } else {
@@ -1423,47 +1495,60 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           camera.position.z = previousZ;
         }
 
-        // Infinite Circular Little-Planet Seamless Toroidal Wrapping!
-        // When user walks across the planet radius, smoothly wrap to the other side!
+        // Infinite Circular Little-Planet Seamless Toroidal Wrapping
         const distFromPlanetCenter = Math.hypot(camera.position.x, camera.position.z);
         if (distFromPlanetCenter > worldBoundRadius) {
-          // Wrap around seamlessly
           const scale = (worldBoundRadius - 1.5) / distFromPlanetCenter;
           camera.position.x = -camera.position.x * scale;
           camera.position.z = -camera.position.z * scale;
         }
       }
 
-      // Smooth terrain vertical dampening to curved little-planet surface
+      // Smooth terrain height dampening
       const targetGroundY = getLittlePlanetHeight(camera.position.x, camera.position.z);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, targetGroundY + 1.85, 10, delta);
 
-      // Wildlife stays within its own habitat and sings once when the player enters its territory.
+      // Stationary Wildlife Idle Animations & Proximity Detection
       const playerXZ = new THREE.Vector2(camera.position.x, camera.position.z);
       for (const animal of forestAnimals) {
-        const t = elapsed * animal.speed + animal.phase;
-        const roamX = animal.anchorX + Math.cos(t) * animal.roamRadius;
-        const roamZ = animal.anchorZ + Math.sin(t * 0.73) * animal.roamRadius * 0.72;
-        animal.group.position.x = roamX;
-        animal.group.position.z = roamZ;
-        animal.group.position.y = getLittlePlanetHeight(roamX, roamZ) + Math.abs(Math.sin(t * 2.2)) * (animal.kind === 'frog' ? 0.32 : 0.035);
-        animal.group.rotation.y = Math.sin(t * 0.7) * 0.35;
+        // Idle Animation (Transforms remain fixed at anchorX, anchorZ)
+        const breathe = Math.sin(elapsed * 2.2 + animal.freq) * 0.03;
+        animal.group.scale.y = 1 + breathe;
+
+        if (animal.ears) {
+          const earTilt = Math.sin(elapsed * 1.5) * 0.1;
+          animal.ears[0].rotation.z = -0.12 + earTilt;
+          animal.ears[1].rotation.z = 0.12 - earTilt;
+        }
+        if (animal.head) {
+          animal.head.rotation.y = Math.sin(elapsed * 0.8) * 0.12;
+        }
+        if (animal.wings) {
+          const wingFlap = Math.sin(elapsed * 3.5) * 0.08;
+          animal.wings[0].rotation.z = -0.22 + wingFlap;
+          animal.wings[1].rotation.z = 0.22 - wingFlap;
+        }
+        if (animal.antenna) {
+          const antTwitch = Math.sin(elapsed * 4.0) * 0.15;
+          animal.antenna[0].rotation.z = -0.2 + antTwitch;
+          animal.antenna[1].rotation.z = 0.2 - antTwitch;
+        }
+
+        // Proximity Chord Triggering
         const distance = playerXZ.distanceTo(new THREE.Vector2(animal.anchorX, animal.anchorZ));
         const inside = distance < animal.zoneRadius;
         if (inside && !animal.wasInside && elapsed - animal.lastSoundAt > 5) {
-          const character = animal.kind === 'frog' ? 3 : animal.kind === 'cricket' ? 4 : animal.kind === 'owl' || animal.kind === 'nightAngel' ? 2 : 0;
-          triggerNaturePad(animal.freq, character);
+          audioEngine.triggerAnimalChord(animal.freq, animal.character);
           animal.lastSoundAt = elapsed;
         }
         animal.wasInside = inside;
       }
+
       for (const plant of pondPlants) {
         plant.group.rotation.y = Math.sin(elapsed * 0.35 + plant.phase) * 0.08;
-        plant.group.position.y = pondY + Math.sin(elapsed * 0.8 + plant.phase) * 0.025;
       }
-      pondWaterMat.opacity = 0.79 + Math.sin(elapsed * 0.65) * 0.045;
 
-      // Animate Firefly Swarm
+      // Animate Fireflies
       const fPositions = fireflyGeo.attributes.position.array as Float32Array;
       for (let i = 0; i < fireflyCount; i++) {
         const bp = fireflyBaseData[i];
@@ -1622,7 +1707,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       animalCone.dispose();
       Object.values(animalMats).forEach((mat) => mat.dispose());
       pondWater.geometry.dispose(); pondWaterMat.dispose();
-      pondEdge.geometry.dispose(); (pondEdge.material as THREE.Material).dispose();
+      shoreRing.geometry.dispose(); shoreMat.dispose();
       lotusMat.dispose(); lotusPetalMat.dispose(); cattailMat.dispose(); cattailHeadMat.dispose();
       sparkGeo.dispose();
       sparkMat.dispose();
