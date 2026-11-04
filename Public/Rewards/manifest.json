@@ -1,3 +1,22 @@
 {
-  "rewards": []
+  "rewards": [
+    {
+      "id": "bach-prelude-c",
+      "name": "Bach \u2014 Prelude in C Major (excerpt)",
+      "file": "/rewards/melodies/bach-prelude-c-major.mid",
+      "durationSeconds": 12.0
+    },
+    {
+      "id": "beethoven-ode-joy",
+      "name": "Beethoven \u2014 Ode to Joy (excerpt)",
+      "file": "/rewards/melodies/beethoven-ode-to-joy.mid",
+      "durationSeconds": 12.9
+    },
+    {
+      "id": "mozart-eine-kleine",
+      "name": "Mozart \u2014 Eine kleine Nachtmusik (excerpt)",
+      "file": "/rewards/melodies/mozart-eine-kleine-nachtmusik.mid",
+      "durationSeconds": 10.9
+    }
+  ]
 }
