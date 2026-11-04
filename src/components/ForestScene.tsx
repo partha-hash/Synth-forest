@@ -29,6 +29,9 @@ interface ForestSceneProps {
   selectedMode: ModeKey;
   bloomEnabled: boolean;
   isAutoExploring?: boolean;
+  discoverySeed?: number;
+  onDiscoveryProgress?: (progress: number) => void;
+  discoveryCompleted?: boolean;
   joystickVector: { x: number; y: number };
   onThemeCycle?: (newTheme: ForestThemeKey) => void;
   onObjectPlayed?: (
@@ -71,7 +74,7 @@ interface SplashSpark {
 
 interface ForestAnimal {
   group: THREE.Group;
-  kind: 'bunny' | 'deer' | 'bear' | 'frog' | 'owl' | 'nightAngel' | 'asianCuckoo' | 'cricket';
+  kind: 'bunny' | 'deer' | 'bear' | 'frog' | 'owl' | 'nightAngel' | 'asianCuckoo' | 'cricket' | 'mouse' | 'cat' | 'fox' | 'squirrel';
   label: string;
   anchorX: number;
   anchorZ: number;
@@ -94,6 +97,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   selectedMode,
   bloomEnabled,
   isAutoExploring = false,
+  discoverySeed = 1,
+  onDiscoveryProgress,
+  discoveryCompleted = false,
   joystickVector,
   onThemeCycle,
   onObjectPlayed,
@@ -106,6 +112,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   const bloomRef = useRef(bloomEnabled);
   bloomRef.current = bloomEnabled;
   const autoExploreRef = useRef(isAutoExploring);
+  const discoverySeedRef = useRef(discoverySeed); discoverySeedRef.current = discoverySeed;
+  const discoveryCompletedRef = useRef(discoveryCompleted); discoveryCompletedRef.current = discoveryCompleted;
+  const discoveryProgressRef = useRef(onDiscoveryProgress); discoveryProgressRef.current = onDiscoveryProgress;
   autoExploreRef.current = isAutoExploring;
   const joystickRef = useRef(joystickVector);
   joystickRef.current = joystickVector;
@@ -337,7 +346,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
     };
-    const animalSphere = new THREE.SphereGeometry(1, 16, 12);
+    const animalSphere = new THREE.SphereGeometry(1, 7, 5);
     const animalCone = new THREE.ConeGeometry(0.16, 0.55, 8);
 
     const makeAnimal = (
@@ -399,6 +408,21 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         addPart(animalSphere, animalMats.brown, 0.26, 1.13, -0.37, 0.13, 0.13, 0.12);
         addPart(animalSphere, animalMats.cream, 0, 0.78, -0.62, 0.19, 0.14, 0.12);
         eyes();
+      } else if (kind === 'mouse' || kind === 'cat' || kind === 'fox' || kind === 'squirrel') {
+        const coat = kind === 'fox' ? animalMats.tan : kind === 'cat' ? animalMats.dark : kind === 'mouse' ? animalMats.cream : animalMats.brown;
+        addPart(animalSphere, coat, 0, kind === 'squirrel' ? 0.43 : 0.38, 0.02, kind === 'cat' ? 0.29 : 0.25, 0.24, 0.43);
+        head = addPart(animalSphere, coat, 0, 0.63, -0.32, 0.23, 0.22, 0.23);
+        // Distinctive pointed ears and muzzles make each silhouette readable.
+        for (const side of [-1, 1]) {
+          const ear = addPart(animalCone, coat, side * 0.14, 0.91, -0.34, 0.42, 0.42, 0.42, side * -0.18);
+          ears.push(ear);
+        }
+        addPart(animalSphere, kind === 'fox' ? animalMats.cream : animalMats.white, 0, 0.55, -0.52, 0.13, 0.09, 0.13);
+        eyes();
+        if (kind === 'squirrel' || kind === 'fox') {
+          const tail = addPart(animalSphere, kind === 'fox' ? animalMats.cream : animalMats.tan, 0, 0.54, 0.47, 0.18, 0.2, kind === 'fox' ? 0.5 : 0.35);
+          tail.rotation.x = -0.8;
+        }
       } else if (kind === 'frog') {
         addPart(animalSphere, animalMats.green, 0, 0.22, 0, 0.4, 0.22, 0.34);
         addPart(animalSphere, animalMats.green, -0.23, 0.45, -0.18, 0.15, 0.16, 0.15);
@@ -435,8 +459,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       scene.add(group);
 
       const names: Record<ForestAnimal['kind'], string> = {
-        bunny: 'Forest Bunny', deer: 'Grove Deer', bear: 'Woodland Bear', frog: 'Pond Frogs',
+        bunny: 'Forest Bunny', deer: 'Grove Deer', bear: 'Woodland Bear', frog: 'Pond Frog',
         owl: 'Moonlit Owl', nightAngel: 'Night Angel', asianCuckoo: 'Asian Cuckoo', cricket: 'Forest Crickets',
+        mouse: 'Meadow Mouse', cat: 'Forest Cat', fox: 'Red Fox', squirrel: 'Grove Squirrel',
       };
 
       forestAnimals.push({
@@ -447,7 +472,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       });
     };
 
-    // Instantiate 8 stationary animals
+    // Instantiate a diverse set of low-poly stationary wildlife
     makeAnimal('bunny', -16, -18, 392, 0);
     makeAnimal('deer', 24, -24, 293.66, 1);
     makeAnimal('bear', -27, 20, 196, 2);
@@ -456,6 +481,26 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     makeAnimal('nightAngel', -2, 35, 587.33, 5);
     makeAnimal('asianCuckoo', 27, 25, 440, 6);
     makeAnimal('cricket', -27, -23, 659.25, 7);
+    makeAnimal('fox', 16, 19, 329.63, 8);
+    makeAnimal('mouse', -10, 27, 493.88, 9);
+    makeAnimal('cat', 31, -8, 261.63, 10);
+    makeAnimal('squirrel', -31, -7, 587.33, 11);
+
+    // Daily discovery object: deterministic location for the current 24-hour task seed.
+    const discoveryRandom = (n: number) => { const v = Math.sin((discoverySeedRef.current * 127.1) + n * 311.7) * 43758.5453; return v - Math.floor(v); };
+    const discoveryX = (discoveryRandom(1) - 0.5) * 44;
+    let discoveryZ = (discoveryRandom(2) - 0.5) * 44;
+    if (Math.hypot(discoveryX, discoveryZ) < 10) discoveryZ = discoveryZ < 0 ? -15 : 15;
+    const discoveryGroup = new THREE.Group();
+    const discoveryCoreMat = new THREE.MeshStandardMaterial({ color: 0xffd978, emissive: 0xffa51f, emissiveIntensity: 0.25, roughness: 0.25, metalness: 0.12 });
+    const discoveryCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), discoveryCoreMat);
+    discoveryCore.position.y = 0.72; discoveryGroup.add(discoveryCore);
+    const discoveryHalo = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.035, 6, 28), new THREE.MeshBasicMaterial({ color: 0xffd978, transparent: true, opacity: 0.45 }));
+    discoveryHalo.rotation.x = Math.PI / 2; discoveryHalo.position.y = 0.28; discoveryGroup.add(discoveryHalo);
+    const discoveryLight = new THREE.PointLight(0xffc45c, 0.25, 5);
+    discoveryLight.position.y = 0.9; discoveryGroup.add(discoveryLight);
+    discoveryGroup.position.set(discoveryX, getLittlePlanetHeight(discoveryX, discoveryZ) + 0.05, discoveryZ);
+    discoveryGroup.visible = !discoveryCompletedRef.current; scene.add(discoveryGroup);
 
     // Optimized Organic Pond Setup
     const pondCenter = new THREE.Vector2(0, 0);
@@ -1568,8 +1613,13 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const isAutoExplore = autoExploreRef.current;
 
       if (isAutoExplore) {
-        cameraYaw += (Math.sin(elapsed * 0.35) * 0.45 + Math.cos(elapsed * 0.17) * 0.25) * delta;
-        cameraPitch = THREE.MathUtils.damp(cameraPitch, Math.sin(elapsed * 0.5) * 0.05, 2.5, delta);
+        const roamTargetX = camera.position.x + Math.sin(elapsed * 0.12) * 5.5;
+        const roamTargetZ = camera.position.z + Math.cos(elapsed * 0.12) * 5.5;
+        const nearbyTree = interactiveProps.filter((p) => p.type === 'tree').sort((a,b) => a.group.position.distanceTo(camera.position) - b.group.position.distanceTo(camera.position))[0];
+        const focusPoint = nearbyTree ? nearbyTree.group.position : new THREE.Vector3(roamTargetX, camera.position.y, roamTargetZ);
+        const desiredYaw = Math.atan2(-(focusPoint.x - camera.position.x), -(focusPoint.z - camera.position.z));
+        cameraYaw = THREE.MathUtils.damp(cameraYaw, desiredYaw, 0.32, delta);
+        cameraPitch = THREE.MathUtils.damp(cameraPitch, -0.025 + Math.sin(elapsed * 0.16) * 0.025, 0.45, delta);
         camera.rotation.set(0, 0, 0);
         camera.rotation.order = 'YXZ';
         camera.rotation.y = cameraYaw;
@@ -1611,7 +1661,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         _euler.set(0, cameraYaw, 0, 'YXZ');
         _moveDir.applyEuler(_euler);
 
-        const walkSpeed = isAutoExplore ? 2.1 : 2.4;
+        const walkSpeed = isAutoExplore ? 0.62 : 2.4;
         const previousX = camera.position.x;
         const previousZ = camera.position.z;
         const nextX = previousX + _moveDir.x * walkSpeed * delta;
@@ -1642,6 +1692,19 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Stationary Wildlife Idle Animations & Proximity Detection
       const playerXZ = new THREE.Vector2(camera.position.x, camera.position.z);
+      if (!discoveryCompletedRef.current) {
+        const discoveryDistance = Math.hypot(camera.position.x - discoveryX, camera.position.z - discoveryZ);
+        const proximity = THREE.MathUtils.clamp(1 - (discoveryDistance / 12), 0, 1);
+        discoveryGroup.visible = true;
+        discoveryCore.rotation.y += delta * (0.35 + proximity * 1.8);
+        discoveryCore.scale.setScalar(1 + proximity * 0.22 + Math.sin(elapsed * 2.4) * 0.035);
+        discoveryCoreMat.emissiveIntensity = 0.25 + proximity * 2.2;
+        discoveryLight.intensity = 0.25 + proximity * 3.2;
+        discoveryHalo.material.opacity = 0.25 + proximity * 0.65;
+        if (Math.floor(elapsed * 5) !== Math.floor((elapsed - delta) * 5)) discoveryProgressRef.current?.(proximity);
+        if (discoveryDistance < 2.1) discoveryProgressRef.current?.(1);
+      } else { discoveryGroup.visible = false; }
+
       for (const animal of forestAnimals) {
         // Idle Animation (Transforms remain fixed at anchorX, anchorZ)
         const breathe = Math.sin(elapsed * 2.2 + animal.freq) * 0.03;
