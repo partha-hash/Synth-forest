@@ -29,9 +29,6 @@ interface ForestSceneProps {
   selectedMode: ModeKey;
   bloomEnabled: boolean;
   isAutoExploring?: boolean;
-  discoverySeed?: number;
-  onDiscoveryProgress?: (progress: number) => void;
-  discoveryCompleted?: boolean;
   joystickVector: { x: number; y: number };
   onThemeCycle?: (newTheme: ForestThemeKey) => void;
   onObjectPlayed?: (
@@ -97,9 +94,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   selectedMode,
   bloomEnabled,
   isAutoExploring = false,
-  discoverySeed = 1,
-  onDiscoveryProgress,
-  discoveryCompleted = false,
   joystickVector,
   onThemeCycle,
   onObjectPlayed,
@@ -112,9 +106,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   const bloomRef = useRef(bloomEnabled);
   bloomRef.current = bloomEnabled;
   const autoExploreRef = useRef(isAutoExploring);
-  const discoverySeedRef = useRef(discoverySeed); discoverySeedRef.current = discoverySeed;
-  const discoveryCompletedRef = useRef(discoveryCompleted); discoveryCompletedRef.current = discoveryCompleted;
-  const discoveryProgressRef = useRef(onDiscoveryProgress); discoveryProgressRef.current = onDiscoveryProgress;
   autoExploreRef.current = isAutoExploring;
   const joystickRef = useRef(joystickVector);
   joystickRef.current = joystickVector;
@@ -486,21 +477,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     makeAnimal('cat', 31, -8, 261.63, 10);
     makeAnimal('squirrel', -31, -7, 587.33, 11);
 
-    // Daily discovery object: deterministic location for the current 24-hour task seed.
-    const discoveryRandom = (n: number) => { const v = Math.sin((discoverySeedRef.current * 127.1) + n * 311.7) * 43758.5453; return v - Math.floor(v); };
-    const discoveryX = (discoveryRandom(1) - 0.5) * 44;
-    let discoveryZ = (discoveryRandom(2) - 0.5) * 44;
-    if (Math.hypot(discoveryX, discoveryZ) < 10) discoveryZ = discoveryZ < 0 ? -15 : 15;
-    const discoveryGroup = new THREE.Group();
-    const discoveryCoreMat = new THREE.MeshStandardMaterial({ color: 0xffd978, emissive: 0xffa51f, emissiveIntensity: 0.25, roughness: 0.25, metalness: 0.12 });
-    const discoveryCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), discoveryCoreMat);
-    discoveryCore.position.y = 0.72; discoveryGroup.add(discoveryCore);
-    const discoveryHalo = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.035, 6, 28), new THREE.MeshBasicMaterial({ color: 0xffd978, transparent: true, opacity: 0.45 }));
-    discoveryHalo.rotation.x = Math.PI / 2; discoveryHalo.position.y = 0.28; discoveryGroup.add(discoveryHalo);
-    const discoveryLight = new THREE.PointLight(0xffc45c, 0.25, 5);
-    discoveryLight.position.y = 0.9; discoveryGroup.add(discoveryLight);
-    discoveryGroup.position.set(discoveryX, getLittlePlanetHeight(discoveryX, discoveryZ) + 0.05, discoveryZ);
-    discoveryGroup.visible = !discoveryCompletedRef.current; scene.add(discoveryGroup);
 
     // Optimized Organic Pond Setup
     const pondCenter = new THREE.Vector2(0, 0);
@@ -1692,18 +1668,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Stationary Wildlife Idle Animations & Proximity Detection
       const playerXZ = new THREE.Vector2(camera.position.x, camera.position.z);
-      if (!discoveryCompletedRef.current) {
-        const discoveryDistance = Math.hypot(camera.position.x - discoveryX, camera.position.z - discoveryZ);
-        const proximity = THREE.MathUtils.clamp(1 - (discoveryDistance / 12), 0, 1);
-        discoveryGroup.visible = true;
-        discoveryCore.rotation.y += delta * (0.35 + proximity * 1.8);
-        discoveryCore.scale.setScalar(1 + proximity * 0.22 + Math.sin(elapsed * 2.4) * 0.035);
-        discoveryCoreMat.emissiveIntensity = 0.25 + proximity * 2.2;
-        discoveryLight.intensity = 0.25 + proximity * 3.2;
-        discoveryHalo.material.opacity = 0.25 + proximity * 0.65;
-        if (Math.floor(elapsed * 5) !== Math.floor((elapsed - delta) * 5)) discoveryProgressRef.current?.(proximity);
-        if (discoveryDistance < 2.1) discoveryProgressRef.current?.(1);
-      } else { discoveryGroup.visible = false; }
 
       for (const animal of forestAnimals) {
         // Idle Animation (Transforms remain fixed at anchorX, anchorZ)
