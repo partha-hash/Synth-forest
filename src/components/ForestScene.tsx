@@ -142,14 +142,13 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     // 3. Renderer with ACES Tone Mapping
     const renderer = new THREE.WebGLRenderer({
-      // Flat, faceted forms read clearly without expensive multisample antialiasing.
-      antialias: false,
-      powerPreference: 'low-power',
+      antialias: !isSoftwareGl,
+      powerPreference: 'high-performance',
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 1.35));
+    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     container.innerHTML = '';
@@ -161,8 +160,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     if (!isSoftwareGl) {
       composer = new EffectComposer(renderer);
-      // Bloom is deliberately rendered below full resolution; it is atmosphere, not the focus.
-      composer.setPixelRatio(0.8);
       const renderPass = new RenderPass(scene, camera);
       composer.addPass(renderPass);
 
@@ -210,19 +207,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const z = posAttr.getZ(i);
       posAttr.setY(i, getLittlePlanetHeight(x, z));
     }
-    // Cut a real opening in the terrain for the sunken pond basin.
-    // The same geometry is shared by the terrain wire overlay, so neither can cover the water.
-    const terrainIndex = terrainGeo.getIndex();
-    if (terrainIndex) {
-      const kept: number[] = [];
-      for (let i = 0; i < terrainIndex.count; i += 3) {
-        const ia = terrainIndex.getX(i), ib = terrainIndex.getX(i + 1), ic = terrainIndex.getX(i + 2);
-        const cx = (posAttr.getX(ia) + posAttr.getX(ib) + posAttr.getX(ic)) / 3;
-        const cz = (posAttr.getZ(ia) + posAttr.getZ(ib) + posAttr.getZ(ic)) / 3;
-        if (Math.hypot(cx, cz) > 8.9) kept.push(ia, ib, ic);
-      }
-      terrainGeo.setIndex(kept);
-    }
     terrainGeo.computeVertexNormals();
 
     const terrainMat = new THREE.MeshStandardMaterial({
@@ -245,45 +229,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const wireMesh = new THREE.Mesh(terrainGeo, wireMat);
     wireMesh.position.y += 0.04;
     scene.add(wireMesh);
-
-    // Sunken pond banks: concentric sloped rings descend from the ground into the basin.
-    const bankSegments = 64;
-    const bankRings = [
-      { radius: 8.9, drop: 0.02, color: new THREE.Color(0x68734a) },
-      { radius: 7.6, drop: 0.20, color: new THREE.Color(0x536344) },
-      { radius: 6.35, drop: 0.72, color: new THREE.Color(0x66533b) },
-      { radius: 5.55, drop: 0.92, color: new THREE.Color(0x3d5143) },
-    ];
-    const bankPositions: number[] = [];
-    const bankColors: number[] = [];
-    const bankIndices: number[] = [];
-    for (const ring of bankRings) {
-      for (let i = 0; i < bankSegments; i++) {
-        const a = (i / bankSegments) * Math.PI * 2;
-        const x = Math.cos(a) * ring.radius;
-        const z = Math.sin(a) * ring.radius;
-        bankPositions.push(x, getLittlePlanetHeight(x, z) - ring.drop, z);
-        bankColors.push(ring.color.r, ring.color.g, ring.color.b);
-      }
-    }
-    for (let r = 0; r < bankRings.length - 1; r++) {
-      for (let i = 0; i < bankSegments; i++) {
-        const a = r * bankSegments + i;
-        const b = r * bankSegments + (i + 1) % bankSegments;
-        const c = (r + 1) * bankSegments + i;
-        const d = (r + 1) * bankSegments + (i + 1) % bankSegments;
-        bankIndices.push(a, c, b, b, c, d);
-      }
-    }
-    const bankGeo = new THREE.BufferGeometry();
-    bankGeo.setAttribute('position', new THREE.Float32BufferAttribute(bankPositions, 3));
-    bankGeo.setAttribute('color', new THREE.Float32BufferAttribute(bankColors, 3));
-    bankGeo.setIndex(bankIndices);
-    bankGeo.computeVertexNormals();
-    const bankMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide });
-    const pondBank = new THREE.Mesh(bankGeo, bankMat);
-    pondBank.renderOrder = 2;
-    scene.add(pondBank);
 
     // Circular Little-Planet Atmospheric Glow Ring
     const atmoGeo = new THREE.RingGeometry(73.5, 76.5, 64);
@@ -382,18 +327,19 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // Wildlife stationary habitats & ambient synthesizer setup
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
-      cream: new THREE.MeshStandardMaterial({ color: 0xf0dfbd, roughness: 0.82, emissive: 0x3b2916, emissiveIntensity: 0.12 }),
-      brown: new THREE.MeshStandardMaterial({ color: 0xa66a43, roughness: 0.82, emissive: 0x241006, emissiveIntensity: 0.14 }),
+      cream: new THREE.MeshStandardMaterial({ color: 0xf4e4c7, roughness: 0.82, emissive: 0x554027, emissiveIntensity: 0.16 }),
+      brown: new THREE.MeshStandardMaterial({ color: 0x9b5731, roughness: 0.82, emissive: 0x3a1c0c, emissiveIntensity: 0.18 }),
       dark: new THREE.MeshStandardMaterial({ color: 0x292b32, roughness: 0.82 }),
-      tan: new THREE.MeshStandardMaterial({ color: 0xd6a064, roughness: 0.82, emissive: 0x39200b, emissiveIntensity: 0.12 }),
+      tan: new THREE.MeshStandardMaterial({ color: 0xe2ad68, roughness: 0.82, emissive: 0x56330e, emissiveIntensity: 0.16 }),
       white: new THREE.MeshStandardMaterial({ color: 0xfff7e8, roughness: 0.65, emissive: 0x55442c, emissiveIntensity: 0.12 }),
-      green: new THREE.MeshStandardMaterial({ color: 0x91c96a, roughness: 0.78, emissive: 0x1b3810, emissiveIntensity: 0.16 }),
+      green: new THREE.MeshStandardMaterial({ color: 0x8fcf58, roughness: 0.78, emissive: 0x244b12, emissiveIntensity: 0.2 }),
       gold: new THREE.MeshStandardMaterial({ color: 0xf0c779, roughness: 0.68, emissive: 0x53340b, emissiveIntensity: 0.14 }),
       eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
     };
-    const animalSphere = new THREE.SphereGeometry(1, 16, 12);
-    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 8);
+    // Shared faceted primitives give wildlife a consistent low-poly diorama style.
+    const animalSphere = new THREE.IcosahedronGeometry(1, 0);
+    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 5);
 
     const makeAnimal = (
       kind: ForestAnimal['kind'],
@@ -483,9 +429,25 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         }
       }
 
+      // Four clearly separated faceted legs make land animals readable from a distance.
+      if (kind === 'bunny' || kind === 'deer' || kind === 'bear') {
+        const legMat = kind === 'deer' ? animalMats.tan : (kind === 'bunny' ? animalMats.cream : animalMats.brown);
+        const legHeight = kind === 'deer' ? 0.43 : (kind === 'bunny' ? 0.22 : 0.34);
+        const legRadius = kind === 'deer' ? 0.075 : (kind === 'bunny' ? 0.09 : 0.14);
+        const legGeo = new THREE.CylinderGeometry(legRadius * 0.82, legRadius, legHeight, 5);
+        for (const lx of [-0.22, 0.22]) {
+          for (const lz of [-0.28, 0.28]) {
+            const leg = new THREE.Mesh(legGeo, legMat);
+            leg.position.set(lx, legHeight * 0.48, lz);
+            leg.castShadow = true;
+            group.add(leg);
+          }
+        }
+      }
+
       const y = getLittlePlanetHeight(x, z);
       group.position.set(x, y + 0.06, z);
-      group.scale.setScalar(1.38);
+      group.scale.setScalar(kind === 'frog' || kind === 'cricket' ? 1.55 : 1.62);
       group.userData = { isAnimal: true, kind, freq, character };
       scene.add(group);
 
@@ -528,10 +490,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const pz = pondCenter.y + Math.sin(angle) * r;
       pondBoundaryPoints.push(new THREE.Vector2(px, pz));
     }
-    // Player collision follows the outside lip of the entire ditch, not just the water edge.
-    const pondCollisionBoundaryPoints = pondBoundaryPoints.map((pt) =>
-      new THREE.Vector2(pondCenter.x + (pt.x - pondCenter.x) * 1.65, pondCenter.y + (pt.y - pondCenter.y) * 1.65)
-    );
 
     // Organic Pond Shape
     const pondShape = new THREE.Shape();
@@ -563,7 +521,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     for (let i = 0; i < posPond.count; i++) {
       const worldX = pondCenter.x + posPond.getX(i);
       const worldZ = pondCenter.y - posPond.getY(i);
-      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY - 0.92);
+      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.14);
     }
     posPond.needsUpdate = true;
     pondGeo.computeVertexNormals();
@@ -573,11 +531,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // in dark biomes and is not lost against the terrain lighting.
     const pondWaterMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      transparent: false,
-      opacity: 1,
+      transparent: true,
+      opacity: 0.94,
       vertexColors: true,
       side: THREE.DoubleSide,
-      depthWrite: true,
+      depthWrite: false,
       toneMapped: false,
     });
 
@@ -590,7 +548,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // Draw only the shoreline outline (not a wireframe-filled second surface).
     const shorePoints: THREE.Vector3[] = pondBoundaryPoints.map((pt) => new THREE.Vector3(
       pt.x,
-      getLittlePlanetHeight(pt.x, pt.y) + 0.10,
+      getLittlePlanetHeight(pt.x, pt.y) + 0.17,
       pt.y,
     ));
     const shoreGeo = new THREE.BufferGeometry().setFromPoints(shorePoints);
@@ -696,26 +654,39 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       trunk.position.y = 1.2 * scaleRatio;
       treeGroup.add(trunk);
 
-      const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1 * scaleRatio, 2.6 * scaleRatio, 7), pineMat);
-      f1.position.y = 2.4 * scaleRatio;
-      f1.rotation.y = Math.random();
-
-      const f2 = new THREE.Mesh(new THREE.ConeGeometry(1.6 * scaleRatio, 2.2 * scaleRatio, 7), pineMat);
-      f2.position.y = 3.6 * scaleRatio;
-      f2.rotation.y = Math.random();
-
-      const f3 = new THREE.Mesh(new THREE.ConeGeometry(1.1 * scaleRatio, 1.8 * scaleRatio, 7), pineMat);
-      f3.position.y = 4.8 * scaleRatio;
-      f3.rotation.y = Math.random();
-
-      const topperMat = new THREE.MeshBasicMaterial({
-        color: initialTheme.fireflyColor,
-        wireframe: true,
-      });
-      const topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.4 * scaleRatio, 0), topperMat);
-      topper.position.y = 6.0 * scaleRatio;
-
-      treeGroup.add(f1, f2, f3, topper);
+      const isBroadleaf = i % 4 === 0;
+      let topper: THREE.Mesh;
+      if (isBroadleaf) {
+        // Clustered faceted crowns add the rounded low-poly deciduous trees from the references.
+        const crownMat = new THREE.MeshStandardMaterial({
+          color: i % 8 === 0 ? 0x6f9b58 : 0x83a963, roughness: 0.9,
+          emissive: 0x172b10, emissiveIntensity: 0.12, flatShading: true,
+        });
+        const crownGeo = new THREE.IcosahedronGeometry(1.65 * scaleRatio, 0);
+        const crownPositions = [[0, 3.35, 0], [-0.95, 3.0, 0.15], [0.9, 3.05, -0.1], [0, 4.05, 0.1], [0.1, 2.85, -0.9]];
+        crownPositions.forEach(([cx, cy, cz], idx) => {
+          const crown = new THREE.Mesh(crownGeo, crownMat);
+          crown.position.set(cx * scaleRatio, cy * scaleRatio, cz * scaleRatio);
+          crown.scale.setScalar(idx === 0 ? 1 : 0.72);
+          crown.castShadow = true; crown.receiveShadow = true;
+          treeGroup.add(crown);
+        });
+        const topperMat = new THREE.MeshBasicMaterial({ color: initialTheme.fireflyColor, wireframe: true });
+        topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.28 * scaleRatio, 0), topperMat);
+        topper.position.y = 5.0 * scaleRatio;
+      } else {
+        const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1 * scaleRatio, 2.6 * scaleRatio, 6), pineMat);
+        f1.position.y = 2.4 * scaleRatio; f1.rotation.y = Math.random();
+        const f2 = new THREE.Mesh(new THREE.ConeGeometry(1.6 * scaleRatio, 2.2 * scaleRatio, 6), pineMat);
+        f2.position.y = 3.6 * scaleRatio; f2.rotation.y = Math.random();
+        const f3 = new THREE.Mesh(new THREE.ConeGeometry(1.1 * scaleRatio, 1.8 * scaleRatio, 6), pineMat);
+        f3.position.y = 4.8 * scaleRatio; f3.rotation.y = Math.random();
+        const topperMat = new THREE.MeshBasicMaterial({ color: initialTheme.fireflyColor, wireframe: true });
+        topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.4 * scaleRatio, 0), topperMat);
+        topper.position.y = 6.0 * scaleRatio;
+        treeGroup.add(f1, f2, f3);
+      }
+      treeGroup.add(topper);
 
       const pos = getClusteredPosition(i, 20);
       treeGroup.position.set(pos.x, pos.y, pos.z);
@@ -1467,18 +1438,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     };
     window.addEventListener('resize', onResize);
 
-    // Apply a consistent low-poly finish to lit meshes while preserving their existing geometry.
-    scene.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      const materials = Array.isArray(object.material) ? object.material : [object.material];
-      materials.forEach((material) => {
-        if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhongMaterial) {
-          material.flatShading = true;
-          material.needsUpdate = true;
-        }
-      });
-    });
-
     // 14. Main Animation & Render Loop
     let animFrameId = 0;
     const clock = new THREE.Clock();
@@ -1492,7 +1451,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Theme Dynamic Updating
       const activeTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
-      (scene.background as THREE.Color).set(activeTheme.fogColor);
+      scene.background = new THREE.Color(activeTheme.fogColor);
       (scene.fog as THREE.FogExp2).color.set(activeTheme.fogColor);
       ambientLight.color.set(activeTheme.ambientLightColor);
       hemiLight.color.set(activeTheme.keyLightColor);
@@ -1576,7 +1535,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
         // Polygon Shoreline Collision Enforcement
         const nextPos = new THREE.Vector2(nextX, nextZ);
-        if (!isPointInPolygon(nextPos, pondCollisionBoundaryPoints)) {
+        if (!isPointInPolygon(nextPos, pondBoundaryPoints)) {
           camera.position.x = nextX;
           camera.position.z = nextZ;
         } else {
@@ -1796,7 +1755,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       animalCone.dispose();
       Object.values(animalMats).forEach((mat) => mat.dispose());
       pondWater.geometry.dispose(); pondWaterMat.dispose();
-      pondBank.geometry.dispose(); bankMat.dispose();
       shoreRing.geometry.dispose(); shoreMat.dispose();
       lotusMat.dispose(); lotusPetalMat.dispose(); cattailMat.dispose(); cattailHeadMat.dispose();
       sparkGeo.dispose();
