@@ -516,117 +516,40 @@ export class AudioEngine {
   // --- Voice 5: Bioluminescent Mushroom Voices (4 Distinct Sound Varieties) ---
   public triggerMushroomSound(freq: number, subtype: number = 0) {
     if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-    const mode = subtype % 6;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const mode = ((Math.floor(subtype) % 6) + 6) % 6;
+    const safeFreq = Math.max(70, Math.min(2400, freq));
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const amp = ctx.createGain();
+    const shimmer = ctx.createGain();
 
-    if (mode === 0) {
-      // 1. Organic Bio-Bubble Liquid Pop
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
-
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(freq * 1.8, now);
-      filter.Q.setValueAtTime(5.0, now);
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq * 2.2, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.8, now + 0.09);
-
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.35, now + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.effectsBus);
-      osc.start(now);
-      osc.stop(now + 0.6);
-    } else if (mode === 1) {
-      // 2. Lucid FM Spore Chime
-      const carrier = this.ctx.createOscillator();
-      const modulator = this.ctx.createOscillator();
-      const modGain = this.ctx.createGain();
-      const mainGain = this.ctx.createGain();
-
-      carrier.type = 'sine';
-      carrier.frequency.setValueAtTime(freq, now);
-
-      modulator.type = 'triangle';
-      modulator.frequency.setValueAtTime(freq * 1.5, now);
-
-      modGain.gain.setValueAtTime(freq * 1.8, now);
-      modGain.gain.exponentialRampToValueAtTime(1, now + 1.2);
-
-      modulator.connect(modGain);
-      modGain.connect(carrier.frequency);
-
-      mainGain.gain.setValueAtTime(0.001, now);
-      mainGain.gain.linearRampToValueAtTime(0.3, now + 0.006);
-      mainGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
-
-      carrier.connect(mainGain);
-      mainGain.connect(this.effectsBus);
-      carrier.start(now);
-      modulator.start(now);
-      carrier.stop(now + 1.9);
-      modulator.stop(now + 1.9);
-    } else if (mode === 2) {
-      // 3. Deep Fungal Sub-Thump
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq * 0.75, now);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(35, freq * 0.35), now + 0.15);
-
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.38, now + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-
-      osc.connect(gain);
-      gain.connect(this.effectsBus);
-      osc.start(now);
-      osc.stop(now + 0.95);
-    } else if (mode === 3) {
-      // 4. Shimmering Crystal Spore Bell
-      const osc1 = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(freq * 1.25, now);
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(freq * 2.51, now);
-
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.24, now + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(this.effectsBus);
-
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + 2.3);
-      osc2.stop(now + 2.3);
-    } else {
-      // 5/6. Airy shelf-fungus and soft parasol voices: distinct filtered synth textures.
-      const osc = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      const gain = this.ctx.createGain();
-      osc.type = mode === 4 ? 'triangle' : 'sine';
-      osc.frequency.setValueAtTime(freq * (mode === 4 ? 1.5 : 0.5), now);
-      osc.frequency.exponentialRampToValueAtTime(freq * (mode === 4 ? 1.01 : 1.25), now + 0.45);
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(mode === 4 ? 2600 : 950, now);
-      filter.frequency.exponentialRampToValueAtTime(mode === 4 ? 1100 : 420, now + 1.8);
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.2, now + 0.12);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
-      osc.connect(filter); filter.connect(gain); gain.connect(this.effectsBus);
-      osc.start(now); osc.stop(now + 2.5);
-    }
+    // Six quiet, non-percussive fungal voices designed for an ambient soundscape.
+    const wave: OscillatorType[] = ['sine', 'triangle', 'sine', 'sine', 'triangle', 'sine'];
+    osc.type = wave[mode];
+    osc2.type = mode === 1 || mode === 3 ? 'sine' : 'triangle';
+    const ratios = [1.0, 1.5, 0.5, 2.01, 1.25, 2.76];
+    osc.frequency.setValueAtTime(safeFreq, now);
+    osc2.frequency.setValueAtTime(safeFreq * ratios[mode], now);
+    filter.type = mode === 2 ? 'lowpass' : mode === 4 ? 'bandpass' : 'lowpass';
+    filter.frequency.setValueAtTime(mode === 2 ? 420 : mode === 4 ? safeFreq * 2.8 : 2400, now);
+    filter.Q.setValueAtTime(mode === 4 ? 1.8 : 0.7, now);
+    amp.gain.setValueAtTime(0.0001, now);
+    amp.gain.linearRampToValueAtTime(mode === 2 ? 0.12 : 0.085, now + (mode === 5 ? 0.35 : 0.08));
+    amp.gain.setTargetAtTime(0.0001, now + (mode === 2 ? 0.7 : 1.1), mode === 5 ? 1.0 : 0.48);
+    shimmer.gain.setValueAtTime(0.0001, now);
+    shimmer.gain.linearRampToValueAtTime(mode === 3 ? 0.045 : 0.018, now + 0.3);
+    shimmer.gain.setTargetAtTime(0.0001, now + 0.9, 0.8);
+    osc.connect(filter);
+    osc2.connect(shimmer);
+    filter.connect(amp);
+    amp.connect(this.effectsBus);
+    shimmer.connect(this.effectsBus);
+    osc.start(now); osc2.start(now);
+    osc.stop(now + 4.2); osc2.stop(now + 3.8);
+    osc.onended = () => { osc.disconnect(); osc2.disconnect(); filter.disconnect(); amp.disconnect(); shimmer.disconnect(); };
   }
 
   // Alias for backward compatibility
@@ -637,42 +560,38 @@ export class AudioEngine {
   // --- Voice 6: Tactile Tree Tapping (Hollow Wood Knock + Crystal Pine Ring) ---
   public triggerTreeTap(freq: number, subtype: number = 0) {
     if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-    const kind = subtype % 3;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-    if (kind === 0) {
-      // Crystal pine: short wooden knock with a bright, restrained harmonic.
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq * 1.55, now);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(45, freq * 0.82), now + 0.12);
-      filter.type = 'lowpass'; filter.frequency.setValueAtTime(2400, now);
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.25, now + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
-    } else if (kind === 1) {
-      // Broadleaf: warm, soft mallet-like sine/triangle bloom.
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.005, now + 0.25);
-      filter.type = 'lowpass'; filter.frequency.setValueAtTime(1250, now);
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.22, now + 0.09);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.1);
-    } else {
-      // Moss cedar: airy, gently detuned fifth-like resonance.
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq * 1.5, now);
-      osc.frequency.exponentialRampToValueAtTime(freq, now + 0.55);
-      filter.type = 'bandpass'; filter.frequency.setValueAtTime(Math.min(4200, freq * 3), now);
-      filter.Q.setValueAtTime(0.65, now);
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.18, now + 0.16);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
-    }
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const kind = ((Math.floor(subtype) % 4) + 4) % 4;
+    const safeFreq = Math.max(90, Math.min(1200, freq));
+    const osc = ctx.createOscillator();
+    const overtone = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    const tail = ctx.createGain();
+
+    // Pine = crystalline pluck; broadleaf = warm wooden mallet;
+    // bare branches = airy glass; elder canopy = soft low harmonic bloom.
+    osc.type = kind === 1 ? 'triangle' : 'sine';
+    overtone.type = kind === 2 ? 'sine' : 'triangle';
+    const fundamental = kind === 3 ? safeFreq * 0.5 : safeFreq;
+    osc.frequency.setValueAtTime(fundamental, now);
+    overtone.frequency.setValueAtTime(fundamental * (kind === 0 ? 2.76 : kind === 1 ? 1.5 : kind === 2 ? 3.01 : 2.0), now);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(kind === 2 ? 3600 : kind === 3 ? 950 : 2200, now);
+    filter.Q.setValueAtTime(0.65, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(kind === 3 ? 0.075 : 0.14, now + (kind === 3 ? 0.28 : 0.012));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 3 ? 4.8 : kind === 2 ? 2.6 : 1.7));
+    tail.gain.setValueAtTime(0.0001, now);
+    tail.gain.linearRampToValueAtTime(kind === 2 ? 0.035 : 0.018, now + 0.18);
+    tail.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 3 ? 3.6 : 1.8));
     osc.connect(filter); filter.connect(gain); gain.connect(this.effectsBus);
-    osc.start(now); osc.stop(now + (kind === 0 ? 0.8 : 2.7));
+    overtone.connect(tail); tail.connect(this.effectsBus);
+    osc.start(now); overtone.start(now);
+    const duration = kind === 3 ? 5.0 : kind === 2 ? 2.8 : 1.9;
+    osc.stop(now + duration); overtone.stop(now + duration);
+    osc.onended = () => { osc.disconnect(); overtone.disconnect(); filter.disconnect(); gain.disconnect(); tail.disconnect(); };
   }
 
   // --- Ground Splash Impact Audio ---
