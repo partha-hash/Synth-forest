@@ -222,7 +222,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // Luminous Circular Wireframe Mesh
     const wireMat = new THREE.MeshBasicMaterial({
       color: initialTheme.groundWireColor,
-      wireframe: true,
+      wireframe: false,
       transparent: true,
       opacity: 0.45,
     });
@@ -327,18 +327,18 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // Wildlife stationary habitats & ambient synthesizer setup
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
-      cream: new THREE.MeshStandardMaterial({ color: 0xd8c6a4, roughness: 0.92 }),
-      brown: new THREE.MeshStandardMaterial({ color: 0x805238, roughness: 0.95 }),
-      dark: new THREE.MeshStandardMaterial({ color: 0x292b32, roughness: 0.9 }),
-      tan: new THREE.MeshStandardMaterial({ color: 0xb88754, roughness: 0.9 }),
-      white: new THREE.MeshStandardMaterial({ color: 0xe8e6dd, roughness: 0.75 }),
-      green: new THREE.MeshStandardMaterial({ color: 0x6b9b54, roughness: 0.8 }),
-      gold: new THREE.MeshStandardMaterial({ color: 0xd9b46b, roughness: 0.7 }),
+      cream: new THREE.MeshStandardMaterial({ color: 0xf0dfbd, roughness: 0.82, emissive: 0x3b2916, emissiveIntensity: 0.12 }),
+      brown: new THREE.MeshStandardMaterial({ color: 0xa66a43, roughness: 0.82, emissive: 0x241006, emissiveIntensity: 0.14 }),
+      dark: new THREE.MeshStandardMaterial({ color: 0x292b32, roughness: 0.82 }),
+      tan: new THREE.MeshStandardMaterial({ color: 0xd6a064, roughness: 0.82, emissive: 0x39200b, emissiveIntensity: 0.12 }),
+      white: new THREE.MeshStandardMaterial({ color: 0xfff7e8, roughness: 0.65, emissive: 0x55442c, emissiveIntensity: 0.12 }),
+      green: new THREE.MeshStandardMaterial({ color: 0x91c96a, roughness: 0.78, emissive: 0x1b3810, emissiveIntensity: 0.16 }),
+      gold: new THREE.MeshStandardMaterial({ color: 0xf0c779, roughness: 0.68, emissive: 0x53340b, emissiveIntensity: 0.14 }),
       eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
     };
-    const animalSphere = new THREE.SphereGeometry(1, 8, 6);
-    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 5);
+    const animalSphere = new THREE.SphereGeometry(1, 16, 12);
+    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 8);
 
     const makeAnimal = (
       kind: ForestAnimal['kind'],
@@ -429,7 +429,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
 
       const y = getLittlePlanetHeight(x, z);
-      group.position.set(x, y, z);
+      group.position.set(x, y + 0.06, z);
+      group.scale.setScalar(1.38);
       group.userData = { isAnimal: true, kind, freq, character };
       scene.add(group);
 
@@ -450,14 +451,14 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     makeAnimal('bunny', -16, -18, 392, 0);
     makeAnimal('deer', 24, -24, 293.66, 1);
     makeAnimal('bear', -27, 20, 196, 2);
-    makeAnimal('frog', 14, -7, 523.25, 3);
+    makeAnimal('frog', 7.4, -2.8, 523.25, 3);
     makeAnimal('owl', 0, -35, 349.23, 4);
     makeAnimal('nightAngel', -2, 35, 587.33, 5);
     makeAnimal('asianCuckoo', 27, 25, 440, 6);
     makeAnimal('cricket', -27, -23, 659.25, 7);
 
     // Optimized Organic Pond Setup
-    const pondCenter = new THREE.Vector2(14, -7);
+    const pondCenter = new THREE.Vector2(0, 0);
     const pondY = getLittlePlanetHeight(pondCenter.x, pondCenter.y);
     const pondRadiusBase = 5.4;
 
@@ -499,6 +500,14 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       colors[i * 3 + 1] = vertexColor.g;
       colors[i * 3 + 2] = vertexColor.b;
     }
+    // Conform every pond vertex to the curved terrain so the water sits on the ground.
+    for (let i = 0; i < posPond.count; i++) {
+      const worldX = pondCenter.x + posPond.getX(i);
+      const worldZ = pondCenter.y - posPond.getY(i);
+      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.035);
+    }
+    posPond.needsUpdate = true;
+    pondGeo.computeVertexNormals();
     pondGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const pondWaterMat = new THREE.MeshStandardMaterial({
@@ -512,11 +521,19 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     const pondWater = new THREE.Mesh(pondGeo, pondWaterMat);
     pondWater.rotation.x = -Math.PI / 2;
-    pondWater.position.set(pondCenter.x, pondY + 0.05, pondCenter.y);
+    pondWater.position.set(pondCenter.x, pondY, pondCenter.y);
     scene.add(pondWater);
 
     // Earthy Moss Shoreline Ring
-    const shoreGeo = new THREE.ShapeGeometry(pondShape);
+    const shoreGeo = new THREE.ShapeGeometry(pondShape, 24);
+    const shorePos = shoreGeo.attributes.position;
+    for (let i = 0; i < shorePos.count; i++) {
+      const worldX = pondCenter.x + shorePos.getX(i);
+      const worldZ = pondCenter.y - shorePos.getY(i);
+      shorePos.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.012);
+    }
+    shorePos.needsUpdate = true;
+    shoreGeo.computeVertexNormals();
     const shoreMat = new THREE.MeshStandardMaterial({
       color: 0x3d543b,
       roughness: 0.95,
@@ -524,7 +541,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     });
     const shoreRing = new THREE.Mesh(shoreGeo, shoreMat);
     shoreRing.rotation.x = -Math.PI / 2;
-    shoreRing.position.set(pondCenter.x, pondY + 0.06, pondCenter.y);
+    shoreRing.position.set(pondCenter.x, pondY, pondCenter.y);
     shoreRing.scale.set(1.05, 1.05, 1.05);
     scene.add(shoreRing);
 
@@ -565,16 +582,16 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           g.add(head);
         }
       }
-      g.position.set(x, pondY, z);
+      g.position.set(x, getLittlePlanetHeight(x, z) + 0.025, z);
       scene.add(g);
       pondPlants.push({ group: g, freq, phase, type });
     };
 
-    addPondPlant(12.0, -5.6, 'lotus', 659.25, 0.2);
-    addPondPlant(15.5, -8.2, 'lotus', 783.99, 1.1);
-    addPondPlant(16.2, -4.7, 'lotus', 587.33, 2.0);
-    addPondPlant(10.2, -8.8, 'cattail', 261.63, 2.8);
-    addPondPlant(18.1, -7.5, 'cattail', 293.66, 3.5);
+    addPondPlant(-2.2, -1.0, 'lotus', 659.25, 0.2);
+    addPondPlant(2.0, 1.8, 'lotus', 783.99, 1.1);
+    addPondPlant(1.8, -2.0, 'lotus', 587.33, 2.0);
+    addPondPlant(-3.5, 1.9, 'cattail', 261.63, 2.8);
+    addPondPlant(3.6, -0.8, 'cattail', 293.66, 3.5);
 
     // 2D Polygon Point-In-Polygon Collision Checker for Irregular Pond Edge
     const isPointInPolygon = (pt: THREE.Vector2, poly: THREE.Vector2[]) => {
