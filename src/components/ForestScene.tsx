@@ -1,8 +1,11 @@
 /**
  * redowan's synth forest - 3D Nature Scene
- * Upgraded Features:
- * - Animal Habitat Spatial Clearance (6.5m clear buffer around animals so they stand out clearly)
- * - Soft Lush Sine-Wave Mode-Tuned Animal Chord Harmonies
+ * Features:
+ * - Circular Little-Planet Curvature & Toroidal Wrapping
+ * - Integrated Irregular Pond with animated water ripples & grounded shoreline plants
+ * - Dedicated Animal Habitats (6.5m spatial clearance around all fauna)
+ * - Soft Lush Sine-Wave Scale-Tuned Animal Chord Harmonies
+ * - Two-Finger Sweep Gesture for Biome cycling & full UnrealBloomPass post-processing
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -45,6 +48,24 @@ interface InteractiveProp {
   name: string;
   glowMesh?: THREE.Mesh;
   subtype?: number;
+}
+
+interface ShockwaveRing {
+  mesh: THREE.Mesh;
+  maxRadius: number;
+  progress: number;
+}
+
+interface SplashPointLight {
+  light: THREE.PointLight;
+  initialIntensity: number;
+  timer: number;
+}
+
+interface SplashSpark {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  life: number;
 }
 
 interface ForestAnimal {
@@ -105,36 +126,60 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const container = mountRef.current;
     if (!container) return;
 
+    const isSoftwareGl = (() => {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      if (!gl) return true;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
+      const gpu = String(gl.getParameter(param));
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+    })();
+
+    // 1. Scene & Fog Setup
     const scene = new THREE.Scene();
     const initialTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
     scene.background = new THREE.Color(initialTheme.fogColor);
     scene.fog = new THREE.FogExp2(initialTheme.fogColor, 0.02);
 
+    // 2. Camera Setup
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 400);
     camera.position.set(0, 2.4, 8);
     camera.rotation.order = 'YXZ';
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // 3. Renderer with Tone Mapping
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !isSoftwareGl,
+      powerPreference: 'high-performance',
+    });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
+    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    const composer = new EffectComposer(renderer);
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
+    // 4. UnrealBloomPass Post-Processing
+    let composer: EffectComposer | null = null;
+    let bloomPass: UnrealBloomPass | null = null;
 
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      initialTheme.bloomStrength,
-      initialTheme.bloomRadius,
-      initialTheme.bloomThreshold
-    );
-    composer.addPass(bloomPass);
+    if (!isSoftwareGl) {
+      composer = new EffectComposer(renderer);
+      const renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
 
+      bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        initialTheme.bloomStrength,
+        initialTheme.bloomRadius,
+        initialTheme.bloomThreshold
+      );
+      composer.addPass(bloomPass);
+    }
+
+    // 5. Lighting Setup
     const ambientLight = new THREE.AmbientLight(initialTheme.ambientLightColor, 1.7);
     scene.add(ambientLight);
 
@@ -145,8 +190,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     dirLight.position.set(35, 55, 30);
     scene.add(dirLight);
 
-    // Terrain & Pond
+    // 6. Terrain & Pond Mathematics
     const planetRadius = 135;
+    const worldBoundRadius = 60;
+
     const pondCenter = new THREE.Vector2(14, -7);
     const getPondRadiusAtAngle = (angle: number): number => {
       return 5.2 + Math.sin(angle * 3) * 0.95 + Math.cos(angle * 5) * 0.55 + Math.sin(angle * 2) * 0.4;
@@ -156,54 +203,161 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const dx = x - pondCenter.x;
       const dz = z - pondCenter.y;
       const dist = Math.hypot(dx, dz);
-      return dist / getPondRadiusAtAngle(Math.atan2(dz, dx));
+      const angle = Math.atan2(dz, dx);
+      return dist / getPondRadiusAtAngle(angle);
+    };
+
+    const isInsidePondCollision = (x: number, z: number): boolean => {
+      return getPondDistanceRatio(x, z) < 1.08;
     };
 
     const getLittlePlanetHeight = (x: number, z: number): number => {
       const distSq = x * x + z * z;
       const planetCurve = -distSq / (2 * planetRadius);
-      const hills = Math.sin(x * 0.06) * Math.cos(z * 0.06) * 2.2 + Math.sin(x * 0.025 + z * 0.02) * 2.8;
+      const hills =
+        Math.sin(x * 0.06) * Math.cos(z * 0.06) * 2.2 +
+        Math.sin(x * 0.025 + z * 0.02) * 2.8 +
+        Math.cos(x * 0.12) * 0.4;
+
       const baseHeight = hills + planetCurve;
       const pRatio = getPondDistanceRatio(x, z);
       if (pRatio < 1.8) {
         const factor = Math.max(0, 1 - Math.pow(pRatio / 1.8, 2));
-        return baseHeight - 0.55 * Math.cos((pRatio / 1.8) * (Math.PI / 2)) * factor;
+        const pondDepression = 0.55 * Math.cos((pRatio / 1.8) * (Math.PI / 2));
+        return baseHeight - pondDepression * factor;
       }
       return baseHeight;
     };
 
+    // Circular Disc Terrain
     const terrainGeo = new THREE.RingGeometry(0.1, 74, 48, 64);
     terrainGeo.rotateX(-Math.PI / 2);
     const posAttr = terrainGeo.attributes.position;
     for (let i = 0; i < posAttr.count; i++) {
-      posAttr.setY(i, getLittlePlanetHeight(posAttr.getX(i), posAttr.getZ(i)));
+      const x = posAttr.getX(i);
+      const z = posAttr.getZ(i);
+      posAttr.setY(i, getLittlePlanetHeight(x, z));
     }
     terrainGeo.computeVertexNormals();
 
-    const terrainMat = new THREE.MeshStandardMaterial({ color: initialTheme.groundSolidColor, roughness: 0.82, flatShading: true });
+    const terrainMat = new THREE.MeshStandardMaterial({
+      color: initialTheme.groundSolidColor,
+      roughness: 0.82,
+      metalness: 0.18,
+      flatShading: true,
+    });
     const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+    terrainMesh.userData = { isGround: true };
     scene.add(terrainMesh);
 
-    const wireMat = new THREE.MeshBasicMaterial({ color: initialTheme.groundWireColor, wireframe: true, transparent: true, opacity: 0.45 });
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: initialTheme.groundWireColor,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.45,
+    });
     const wireMesh = new THREE.Mesh(terrainGeo, wireMat);
     wireMesh.position.y += 0.04;
     scene.add(wireMesh);
 
-    // ANIMAL LOCATIONS (Clearances will be maintained around these)
+    const atmoGeo = new THREE.RingGeometry(73.5, 76.5, 64);
+    atmoGeo.rotateX(-Math.PI / 2);
+    const atmoMat = new THREE.MeshBasicMaterial({
+      color: initialTheme.groundWireColor,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.6,
+    });
+    const atmoRing = new THREE.Mesh(atmoGeo, atmoMat);
+    atmoRing.position.y = -20;
+    scene.add(atmoRing);
+
+    // Integrated Pond Geometry
+    const pondY = getLittlePlanetHeight(pondCenter.x, pondCenter.y);
+    const pondSegments = 64;
+    const pondShape = new THREE.Shape();
+
+    for (let i = 0; i <= pondSegments; i++) {
+      const angle = (i / pondSegments) * Math.PI * 2;
+      const r = getPondRadiusAtAngle(angle);
+      const px = Math.cos(angle) * r;
+      const pz = Math.sin(angle) * r;
+      if (i === 0) pondShape.moveTo(px, pz);
+      else pondShape.lineTo(px, pz);
+    }
+
+    const pondWaterGeo = new THREE.ShapeGeometry(pondShape, 32);
+    pondWaterGeo.rotateX(-Math.PI / 2);
+
+    const pondPosAttr = pondWaterGeo.attributes.position;
+    const pondOriginalY = new Float32Array(pondPosAttr.count);
+    for (let i = 0; i < pondPosAttr.count; i++) {
+      const wx = pondPosAttr.getX(i) + pondCenter.x;
+      const wz = pondPosAttr.getZ(i) + pondCenter.y;
+      const height = getLittlePlanetHeight(wx, wz);
+      pondPosAttr.setY(i, height - pondY + 0.02);
+      pondOriginalY[i] = height - pondY + 0.02;
+    }
+    pondWaterGeo.computeVertexNormals();
+
+    const pondWaterMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1b5c6b,
+      roughness: 0.12,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0.82,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      side: THREE.DoubleSide,
+    });
+    const pondWater = new THREE.Mesh(pondWaterGeo, pondWaterMat);
+    pondWater.position.set(pondCenter.x, pondY, pondCenter.y);
+    pondWater.userData = { isPondWater: true };
+    scene.add(pondWater);
+
+    const shoreRingGeo = new THREE.RingGeometry(0.01, 1.45, pondSegments, 1);
+    shoreRingGeo.rotateX(-Math.PI / 2);
+    const shorePos = shoreRingGeo.attributes.position;
+    for (let i = 0; i < shorePos.count; i++) {
+      const vx = shorePos.getX(i);
+      const vz = shorePos.getZ(i);
+      const angle = Math.atan2(vz, vx);
+      const baseR = getPondRadiusAtAngle(angle);
+      const distRatio = Math.hypot(vx, vz);
+      const finalR = baseR + (distRatio - 0.5) * 1.2;
+      const wx = pondCenter.x + Math.cos(angle) * finalR;
+      const wz = pondCenter.y + Math.sin(angle) * finalR;
+      shorePos.setX(i, Math.cos(angle) * finalR);
+      shorePos.setZ(i, Math.sin(angle) * finalR);
+      shorePos.setY(i, getLittlePlanetHeight(wx, wz) - pondY + 0.015);
+    }
+    shoreRingGeo.computeVertexNormals();
+
+    const shoreMat = new THREE.MeshStandardMaterial({
+      color: 0x3d4f36,
+      roughness: 0.95,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.78,
+    });
+    const shoreMesh = new THREE.Mesh(shoreRingGeo, shoreMat);
+    shoreMesh.position.set(pondCenter.x, pondY, pondCenter.y);
+    scene.add(shoreMesh);
+
+    // 7. Animal Spawns with Spatial Clearance Controls
     const animalSpawns = [
-      { kind: 'bunny', x: -16, z: -18, freq: 392 },
-      { kind: 'deer', x: 24, z: -24, freq: 293.66 },
-      { kind: 'bear', x: -27, z: 20, freq: 196 },
-      { kind: 'frog', x: 10.8, z: -9.2, freq: 523.25 },
-      { kind: 'owl', x: 0, z: -35, freq: 349.23 },
-      { kind: 'nightAngel', x: -2, z: 35, freq: 587.33 },
-      { kind: 'asianCuckoo', x: 27, z: 25, freq: 440 },
-      { kind: 'cricket', x: -27, z: -23, freq: 659.25 },
+      { kind: 'bunny' as const, x: -16, z: -18, freq: 392, label: 'Forest Bunny' },
+      { kind: 'deer' as const, x: 24, z: -24, freq: 293.66, label: 'Grove Deer' },
+      { kind: 'bear' as const, x: -27, z: 20, freq: 196, label: 'Woodland Bear' },
+      { kind: 'frog' as const, x: 10.8, z: -9.2, freq: 523.25, label: 'Pond Frogs' },
+      { kind: 'owl' as const, x: 0, z: -35, freq: 349.23, label: 'Moonlit Owl' },
+      { kind: 'nightAngel' as const, x: -2, z: 35, freq: 587.33, label: 'Night Angel' },
+      { kind: 'asianCuckoo' as const, x: 27, z: 25, freq: 440, label: 'Asian Cuckoo' },
+      { kind: 'cricket' as const, x: -27, z: -23, freq: 659.25, label: 'Forest Crickets' },
     ];
 
-    // Helper to enforce spatial clearance buffer around animals
-    const isInsideAnimalClearance = (x: number, z: number, clearRadius = 6.5): boolean => {
-      return animalSpawns.some((a) => Math.hypot(x - a.x, z - a.z) < clearRadius);
+    const isInsideAnimalClearance = (x: number, z: number, clearBuffer = 6.5): boolean => {
+      return animalSpawns.some((a) => Math.hypot(x - a.x, z - a.z) < clearBuffer);
     };
 
     const interactiveProps: InteractiveProp[] = [];
@@ -212,7 +366,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const getModeNote = (index: number) => {
       const mode: MusicalMode = MUSICAL_MODES[modeRef.current] || MUSICAL_MODES.dorian;
       const noteIdx = Math.abs(index) % mode.notes.length;
-      return { freq: mode.notes[noteIdx], noteName: mode.noteNames[noteIdx] };
+      return {
+        freq: mode.notes[noteIdx],
+        name: mode.noteNames[noteIdx],
+        noteName: mode.noteNames[noteIdx],
+      };
     };
 
     // Shared Materials
@@ -220,104 +378,362 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const woodCoreMat = new THREE.MeshStandardMaterial({ color: 0xd97736, roughness: 0.65 });
     const logMat = new THREE.MeshStandardMaterial({ color: 0x442617, roughness: 0.85 });
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0x93a5be, roughness: 0.18, metalness: 0.82 });
-    const pineMat = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.74, initialTheme.foliageLightness) });
+    const pineMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.74, initialTheme.foliageLightness),
+      roughness: 0.35,
+      metalness: 0.22,
+    });
+    const bushMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.6, initialTheme.foliageLightness * 0.9),
+      roughness: 0.6,
+    });
+    const mushroomCapMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(initialTheme.accentColor),
+      roughness: 0.25,
+      metalness: 0.35,
+      emissive: new THREE.Color(initialTheme.sporeColor),
+      emissiveIntensity: 0.45,
+    });
+    const mushroomStemMat = new THREE.MeshStandardMaterial({ color: 0xe0e7ff, roughness: 0.5 });
+    const saplingLeafMat = new THREE.MeshStandardMaterial({ color: 0x4f9b58, roughness: 0.82 });
+    const mossMat = new THREE.MeshStandardMaterial({ color: 0x527d45, roughness: 1.0 });
+    const flowerStemMat = new THREE.MeshStandardMaterial({ color: 0x4d8b48, roughness: 0.9 });
+    const flowerPetalMat = new THREE.MeshStandardMaterial({ color: 0xd98bc7, roughness: 0.55 });
+    const flowerCenterMat = new THREE.MeshStandardMaterial({ color: 0xf4cf69, roughness: 0.55 });
 
-    const registerProp = (group: THREE.Group, type: InteractiveProp['type'], freq: number, noteName: string, name: string) => {
-      group.userData = { isProp: true, type, freq, noteName, name };
+    const registerProp = (
+      group: THREE.Group,
+      type: InteractiveProp['type'],
+      freq: number,
+      noteName: string,
+      name: string,
+      glowMesh?: THREE.Mesh,
+      subtype?: number
+    ) => {
+      group.userData = { isProp: true, type, freq, noteName, name, subtype };
       scene.add(group);
       clickableMeshes.push(group);
-      interactiveProps.push({ group, type, originalScale: group.scale.clone(), animTimer: 0, freq, noteName, name });
+      interactiveProps.push({
+        group,
+        type,
+        originalScale: group.scale.clone(),
+        animTimer: 0,
+        freq,
+        noteName,
+        name,
+        glowMesh,
+        subtype,
+      });
     };
 
-    // Spawn Props ensuring spatial clearance around animals
-    const groveCenters = [
-      { x: -25, z: -22 }, { x: 26, z: -26 }, { x: -28, z: 24 },
-      { x: 27, z: 27 }, { x: 0, z: -38 }, { x: -2, z: 36 },
-    ];
-
-    const getClusteredClearPosition = (index: number, maxRadius: number) => {
-      const grove = groveCenters[index % groveCenters.length];
-      for (let attempt = 0; attempt < 25; attempt++) {
-        const offsetRadius = Math.random() * maxRadius;
-        const angle = Math.random() * Math.PI * 2;
-        const x = grove.x + Math.cos(angle) * offsetRadius;
-        const z = grove.z + Math.sin(angle) * offsetRadius;
-        if (!isInsideAnimalClearance(x, z, 6.5)) {
-          return { x, z, y: getLittlePlanetHeight(x, z) };
-        }
-      }
-      return { x: grove.x + 8, z: grove.z + 8, y: getLittlePlanetHeight(grove.x + 8, grove.z + 8) };
-    };
-
-    // Spawn 68 Pine Trees
-    for (let i = 0; i < 68; i++) {
-      const treeGroup = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, 2.4, 7), trunkMat);
-      trunk.position.y = 1.2;
-      const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1, 2.6, 7), pineMat);
-      f1.position.y = 2.4;
-      treeGroup.add(trunk, f1);
-
-      const pos = getClusteredClearPosition(i, 20);
-      treeGroup.position.set(pos.x, pos.y, pos.z);
-      const note = getModeNote(i);
-      registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.noteName})`);
-    }
-
-    // Spawn Animals in clear dedicated zones
+    // 8. Stationary Interactive Wildlife
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
-      cream: new THREE.MeshStandardMaterial({ color: 0xd8c6a4 }),
-      tan: new THREE.MeshStandardMaterial({ color: 0xb88754 }),
-      brown: new THREE.MeshStandardMaterial({ color: 0x805238 }),
-      green: new THREE.MeshStandardMaterial({ color: 0x6b9b54 }),
+      cream: new THREE.MeshStandardMaterial({ color: 0xd8c6a4, roughness: 0.92 }),
+      brown: new THREE.MeshStandardMaterial({ color: 0x805238, roughness: 0.95 }),
+      dark: new THREE.MeshStandardMaterial({ color: 0x292b32, roughness: 0.9 }),
+      tan: new THREE.MeshStandardMaterial({ color: 0xb88754, roughness: 0.9 }),
+      white: new THREE.MeshStandardMaterial({ color: 0xe8e6dd, roughness: 0.75 }),
+      green: new THREE.MeshStandardMaterial({ color: 0x6b9b54, roughness: 0.8 }),
+      gold: new THREE.MeshStandardMaterial({ color: 0xd9b46b, roughness: 0.7 }),
+      eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
     };
+    const animalSphere = new THREE.SphereGeometry(1, 8, 6);
+    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 5);
 
     animalSpawns.forEach((spawn, idx) => {
       const group = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.SphereGeometry(spawn.kind === 'bear' ? 0.48 : 0.3, 8, 6),
-        animalMats.cream
-      );
-      body.position.y = 0.35;
-      group.add(body);
+      let headMesh: THREE.Object3D | undefined;
+      let bodyMesh: THREE.Object3D | undefined;
+      const wingMeshes: THREE.Object3D[] = [];
+
+      const addPart = (geo: THREE.BufferGeometry, mat: THREE.Material, px: number, py: number, pz: number, sx: number, sy: number, sz: number, rz = 0) => {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px, py, pz);
+        mesh.scale.set(sx, sy, sz);
+        mesh.rotation.z = rz;
+        mesh.castShadow = true;
+        group.add(mesh);
+        return mesh;
+      };
+
+      const eyes = () => {
+        addPart(animalSphere, animalMats.eye, -0.19, 0.55, -0.34, 0.055, 0.065, 0.04);
+        addPart(animalSphere, animalMats.eye, 0.19, 0.55, -0.34, 0.055, 0.065, 0.04);
+      };
+
+      if (spawn.kind === 'bunny') {
+        bodyMesh = addPart(animalSphere, animalMats.cream, 0, 0.35, 0, 0.34, 0.29, 0.48);
+        headMesh = addPart(animalSphere, animalMats.cream, 0, 0.62, -0.34, 0.27, 0.27, 0.27);
+        addPart(animalSphere, animalMats.cream, -0.13, 1.0, -0.37, 0.09, 0.36, 0.09, -0.12);
+        addPart(animalSphere, animalMats.cream, 0.13, 1.0, -0.37, 0.09, 0.36, 0.09, 0.12);
+        eyes();
+      } else if (spawn.kind === 'deer') {
+        bodyMesh = addPart(animalSphere, animalMats.tan, 0, 0.55, 0.05, 0.34, 0.42, 0.62);
+        headMesh = addPart(animalSphere, animalMats.tan, 0, 0.88, -0.42, 0.2, 0.27, 0.23);
+        eyes();
+      } else if (spawn.kind === 'bear') {
+        bodyMesh = addPart(animalSphere, animalMats.brown, 0, 0.48, 0.02, 0.48, 0.48, 0.52);
+        headMesh = addPart(animalSphere, animalMats.brown, 0, 0.88, -0.36, 0.34, 0.33, 0.3);
+        eyes();
+      } else if (spawn.kind === 'frog') {
+        bodyMesh = addPart(animalSphere, animalMats.green, 0, 0.22, 0, 0.4, 0.22, 0.34);
+      } else {
+        const bodyMat = spawn.kind === 'owl' ? animalMats.tan : spawn.kind === 'nightAngel' ? animalMats.glow : animalMats.brown;
+        bodyMesh = addPart(animalSphere, bodyMat, 0, 0.58, 0, 0.32, 0.43, 0.3);
+        headMesh = addPart(animalSphere, bodyMat, 0, 0.9, -0.12, 0.28, 0.27, 0.25);
+        eyes();
+      }
 
       const groundY = getLittlePlanetHeight(spawn.x, spawn.z);
       group.position.set(spawn.x, groundY, spawn.z);
 
-      group.userData = { isAnimal: true, kind: spawn.kind, label: spawn.kind.toUpperCase(), freq: spawn.freq };
+      group.userData = { isAnimal: true, kind: spawn.kind, label: spawn.label, freq: spawn.freq };
+      group.traverse((child) => {
+        child.userData = { isAnimal: true, kind: spawn.kind, label: spawn.label, freq: spawn.freq };
+      });
+
       scene.add(group);
       clickableMeshes.push(group);
 
       forestAnimals.push({
         group,
-        kind: spawn.kind as ForestAnimal['kind'],
-        label: spawn.kind.toUpperCase(),
+        kind: spawn.kind,
+        label: spawn.label,
         posX: spawn.x,
         posZ: spawn.z,
         posY: groundY,
-        zoneRadius: 7.5,
+        zoneRadius: 8.5,
         freq: spawn.freq,
         phase: idx * 0.7,
         wasInside: false,
         lastSoundAt: -100,
-        bodyPart: body,
+        headPart: headMesh,
+        bodyPart: bodyMesh,
+        wingParts: wingMeshes,
       });
     });
 
+    // 9. Clustered Flora/Prop Placement with Animal Clearance Validation
+    const groveCenters = [
+      { x: -25, z: -22 },
+      { x: 26, z: -26 },
+      { x: -28, z: 24 },
+      { x: 27, z: 27 },
+      { x: 0, z: -38 },
+      { x: -2, z: 36 },
+    ];
+
+    const getClusteredClearPosition = (index: number, maxRadius: number) => {
+      const grove = groveCenters[index % groveCenters.length];
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const offsetRadius = Math.random() * maxRadius;
+        const angle = Math.random() * Math.PI * 2;
+        const x = grove.x + Math.cos(angle) * offsetRadius;
+        const z = grove.z + Math.sin(angle) * offsetRadius;
+        if (!isInsideAnimalClearance(x, z, 6.5) && !isInsidePondCollision(x, z)) {
+          return { x, z, y: getLittlePlanetHeight(x, z) };
+        }
+      }
+      return { x: grove.x + 6, z: grove.z + 6, y: getLittlePlanetHeight(grove.x + 6, grove.z + 6) };
+    };
+
+    // A. Pines (68 Trees)
+    for (let i = 0; i < 68; i++) {
+      const treeGroup = new THREE.Group();
+      const isElder = i % 8 === 0;
+      const scaleRatio = (isElder ? 1.45 : 0.8) + Math.random() * 0.4;
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, 2.4 * scaleRatio, 7), trunkMat);
+      trunk.position.y = 1.2 * scaleRatio;
+      treeGroup.add(trunk);
+
+      const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1 * scaleRatio, 2.6 * scaleRatio, 7), pineMat);
+      f1.position.y = 2.4 * scaleRatio;
+      treeGroup.add(f1);
+
+      const pos = getClusteredClearPosition(i, 20);
+      treeGroup.position.set(pos.x, pos.y, pos.z);
+
+      const note = getModeNote(i);
+      registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.name})`);
+    }
+
+    // B. Bioluminescent Mushrooms
+    for (let i = 0; i < 26; i++) {
+      const shroomGroup = new THREE.Group();
+      const mScale = 0.75 + Math.random() * 0.6;
+      const subtype = i % 4;
+
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * mScale, 0.28 * mScale, 1.2 * mScale, 8), mushroomStemMat);
+      stem.position.y = 0.6 * mScale;
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.85 * mScale, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mushroomCapMat);
+      cap.position.y = 1.2 * mScale;
+      shroomGroup.add(stem, cap);
+
+      const pos = getClusteredClearPosition(i + 2, 16);
+      shroomGroup.position.set(pos.x, pos.y, pos.z);
+
+      const note = getModeNote(i + 4);
+      registerProp(shroomGroup, 'mushroom', note.freq * 1.25, note.noteName, `Spore Bell (${note.name})`, cap, subtype);
+    }
+
+    // C. Wood Stumps
+    for (let i = 0; i < 26; i++) {
+      const stumpGroup = new THREE.Group();
+      const outerBark = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.15, 0.85, 8), trunkMat);
+      outerBark.position.y = 0.42;
+      const innerWood = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.06, 8), woodCoreMat);
+      innerWood.position.y = 0.85;
+      stumpGroup.add(outerBark, innerWood);
+
+      const pos = getClusteredClearPosition(i + 5, 18);
+      stumpGroup.position.set(pos.x, pos.y, pos.z);
+
+      const note = getModeNote(i + 2);
+      registerProp(stumpGroup, 'stump', note.freq * 0.72, note.noteName, `Wood Tongue Drum (${note.name})`);
+    }
+
+    // D. Marimba Logs
+    for (let i = 0; i < 22; i++) {
+      const logGroup = new THREE.Group();
+      const mainLog = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 3.8, 8), logMat);
+      mainLog.rotation.z = Math.PI / 2;
+      mainLog.position.y = 0.45;
+      logGroup.add(mainLog);
+
+      const pos = getClusteredClearPosition(i + 8, 20);
+      logGroup.position.set(pos.x, pos.y, pos.z);
+
+      const note = getModeNote(i + 5);
+      registerProp(logGroup, 'log', note.freq * 0.88, note.noteName, `Marimba Log (${note.name})`);
+    }
+
+    // E. Mineral Stones
+    for (let i = 0; i < 28; i++) {
+      const stoneGroup = new THREE.Group();
+      const s1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), stoneMat);
+      s1.position.set(0, 0.7, 0);
+      stoneGroup.add(s1);
+
+      const pos = getClusteredClearPosition(i + 12, 22);
+      stoneGroup.position.set(pos.x, pos.y, pos.z);
+
+      const note = getModeNote(i + 7);
+      registerProp(stoneGroup, 'stone', note.freq * 1.55, note.noteName, `Mineral Stone (${note.name})`);
+    }
+
+    // 10. Fireflies System
+    const fireflyCount = 130;
+    const fireflyGeo = new THREE.BufferGeometry();
+    const fireflyPositions = new Float32Array(fireflyCount * 3);
+    const fireflyBaseData: { x: number; y: number; z: number; seed: number; speed: number }[] = [];
+
+    for (let i = 0; i < fireflyCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * 56;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      const y = getLittlePlanetHeight(x, z) + 0.8 + Math.random() * 4.8;
+      fireflyPositions[i * 3] = x;
+      fireflyPositions[i * 3 + 1] = y;
+      fireflyPositions[i * 3 + 2] = z;
+      fireflyBaseData.push({ x, y, z, seed: Math.random() * 100, speed: 0.7 + Math.random() * 1.1 });
+    }
+    fireflyGeo.setAttribute('position', new THREE.BufferAttribute(fireflyPositions, 3));
+    const fireflyMat = new THREE.PointsMaterial({
+      color: initialTheme.fireflyColor,
+      size: 0.6,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const fireflyPoints = new THREE.Points(fireflyGeo, fireflyMat);
+    scene.add(fireflyPoints);
+
+    // 11. Shockwave & Splash Systems
+    const shockwaves: ShockwaveRing[] = [];
+    const splashLights: SplashPointLight[] = [];
+    const splashSparks: SplashSpark[] = [];
+
+    const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1.0, depthWrite: false });
+    const sparkGeo = new THREE.SphereGeometry(0.12, 4, 4);
+
+    const triggerGroundSplashEffect = (x: number, y: number, z: number, colorHex: number) => {
+      for (let s = 0; s < 2; s++) {
+        const ringGeo = new THREE.RingGeometry(0.2, 0.55, 32);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.95 - s * 0.25, depthWrite: false });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.position.set(x, y + 0.08 + s * 0.02, z);
+        scene.add(ringMesh);
+
+        shockwaves.push({ mesh: ringMesh, maxRadius: 8.5 + s * 2.5, progress: -s * 0.12 });
+      }
+
+      const splashLight = new THREE.PointLight(colorHex, 4.5, 18);
+      splashLight.position.set(x, y + 1.2, z);
+      scene.add(splashLight);
+      splashLights.push({ light: splashLight, initialIntensity: 4.5, timer: 1.0 });
+
+      for (let i = 0; i < 16; i++) {
+        const sparkMesh = new THREE.Mesh(sparkGeo, sparkMat.clone());
+        sparkMesh.position.set(x, y + 0.3, z);
+        scene.add(sparkMesh);
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2.5 + Math.random() * 3.5;
+        splashSparks.push({
+          mesh: sparkMesh,
+          velocity: new THREE.Vector3(Math.cos(angle) * speed, 3.5 + Math.random() * 4.0, Math.sin(angle) * speed),
+          life: 1.0,
+        });
+      }
+    };
+
+    // 12. Audio Interaction Triggers
     const triggerAnimalSound = (animal: ForestAnimal) => {
-      // Triggers Soft Lush Sine-Wave Mode-Tuned Chords
+      triggerGroundSplashEffect(animal.posX, animal.posY, animal.posZ, 0xfbbf24);
       audioEngine.triggerAnimalChord(animal.freq, animal.kind);
       onObjectPlayedRef.current?.('animal', animal.label, animal.freq, animal.kind.toUpperCase());
     };
 
-    const performInteraction = (clientX: number, clientY: number) => {
-      const pointer = new THREE.Vector2(
-        (clientX / window.innerWidth) * 2 - 1,
-        -(clientY / window.innerHeight) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
+    const triggerPropSound = (prop: InteractiveProp) => {
+      prop.animTimer = 1.0;
+      triggerGroundSplashEffect(prop.group.position.x, prop.group.position.y, prop.group.position.z, initialTheme.groundWireColor);
+
+      switch (prop.type) {
+        case 'tree':
+          audioEngine.triggerTreeTap(prop.freq);
+          break;
+        case 'mushroom':
+          audioEngine.triggerMushroomSound(prop.freq, prop.subtype ?? 0);
+          break;
+        case 'stump':
+        case 'log':
+        case 'mossStick':
+          audioEngine.triggerWoodDrum(prop.freq);
+          break;
+        case 'stone':
+          audioEngine.triggerStoneChime(prop.freq);
+          break;
+        case 'bush':
+          audioEngine.triggerBushNoiseImpact(0.85);
+          break;
+        case 'flower':
+          audioEngine.triggerChime(prop.freq, 0.58);
+          break;
+      }
+      onObjectPlayedRef.current?.(prop.type, prop.name, prop.freq, prop.noteName);
+    };
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const performSceneInteraction = (clientX: number, clientY: number) => {
+      pointer.x = (clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
 
       const intersects = raycaster.intersectObjects(clickableMeshes, true);
@@ -328,59 +744,208 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         }
 
         if (top && top.userData?.isAnimal) {
-          const hit = forestAnimals.find((a) => a.kind === top.userData.kind);
-          if (hit) triggerAnimalSound(hit);
-          return;
+          const hitAnimal = forestAnimals.find((a) => a.kind === top.userData.kind);
+          if (hitAnimal) {
+            triggerAnimalSound(hitAnimal);
+            return;
+          }
         }
 
         if (top && top.userData?.isProp) {
           const hitProp = interactiveProps.find((p) => p.group === top);
           if (hitProp) {
-            hitProp.animTimer = 1.0;
-            audioEngine.triggerTreeTap(hitProp.freq);
-            onObjectPlayedRef.current?.(hitProp.type, hitProp.name, hitProp.freq, hitProp.noteName);
+            triggerPropSound(hitProp);
+            return;
           }
         }
       }
+
+      const groundHit = raycaster.intersectObject(terrainMesh);
+      if (groundHit.length > 0) {
+        const pt = groundHit[0].point;
+        triggerGroundSplashEffect(pt.x, pt.y, pt.z, initialTheme.groundWireColor);
+        const groundFreq = 50 + (Math.abs(pt.x + pt.z) % 65);
+        audioEngine.triggerGroundSplash(groundFreq);
+        onObjectPlayedRef.current?.('ground', 'Ground Splash Impact', groundFreq, 'G1');
+      }
     };
 
-    const onClick = (e: MouseEvent) => performInteraction(e.clientX, e.clientY);
-    window.addEventListener('click', onClick);
+    const onSceneClick = (e: MouseEvent) => performSceneInteraction(e.clientX, e.clientY);
+    window.addEventListener('click', onSceneClick);
 
+    // 13. Movement & Controls
+    let cameraYaw = 0;
+    let cameraPitch = 0;
+    let isMouseDragging = false;
+    let prevPointerX = 0;
+    let prevPointerY = 0;
+
+    const onPointerDown = (e: MouseEvent) => {
+      isMouseDragging = true;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+    };
+
+    const onPointerMove = (e: MouseEvent) => {
+      if (!isMouseDragging) return;
+      const deltaX = e.clientX - prevPointerX;
+      const deltaY = e.clientY - prevPointerY;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+
+      cameraYaw -= deltaX * 0.003;
+      cameraPitch = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, cameraPitch - deltaY * 0.003));
+      camera.rotation.set(0, 0, 0);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = cameraYaw;
+      camera.rotation.x = cameraPitch;
+    };
+
+    const onPointerUp = () => {
+      isMouseDragging = false;
+    };
+
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+
+    const onResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', onResize);
+
+    // 14. Render Loop
     let animFrameId = 0;
     const clock = new THREE.Clock();
 
     const renderLoop = () => {
       animFrameId = requestAnimationFrame(renderLoop);
-      const delta = clock.getDelta();
+      const delta = Math.min(clock.getDelta(), 0.1);
       const elapsed = clock.getElapsedTime();
 
-      // Animate Animal Gentle Idle Breath & Habitat Proximity Triggers
-      const playerPos = camera.position;
-      const playerXZ = new THREE.Vector2(playerPos.x, playerPos.z);
+      // Theme Sync
+      const activeTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
+      scene.background = new THREE.Color(activeTheme.fogColor);
+      (scene.fog as THREE.FogExp2).color.set(activeTheme.fogColor);
+      ambientLight.color.set(activeTheme.ambientLightColor);
+      hemiLight.color.set(activeTheme.keyLightColor);
+      dirLight.color.set(activeTheme.keyLightColor);
+      terrainMat.color.set(activeTheme.groundSolidColor);
+      wireMat.color.set(activeTheme.groundWireColor);
 
+      if (bloomPass) {
+        bloomPass.enabled = bloomRef.current;
+        bloomPass.strength = activeTheme.bloomStrength;
+        bloomPass.radius = activeTheme.bloomRadius;
+        bloomPass.threshold = activeTheme.bloomThreshold;
+      }
+
+      // Movement Calculations
+      _moveDir.set(0, 0, 0);
+      const jv = joystickRef.current;
+      if (jv && (Math.abs(jv.x) > 0.05 || Math.abs(jv.y) > 0.05)) {
+        _moveDir.x += jv.x;
+        _moveDir.z += jv.y;
+      }
+
+      if (_moveDir.lengthSq() > 0) {
+        if (_moveDir.length() > 1) _moveDir.normalize();
+        _euler.set(0, cameraYaw, 0, 'YXZ');
+        _moveDir.applyEuler(_euler);
+
+        const nextX = camera.position.x + _moveDir.x * 2.4 * delta;
+        const nextZ = camera.position.z + _moveDir.z * 2.4 * delta;
+
+        if (!isInsidePondCollision(nextX, nextZ)) {
+          camera.position.x = nextX;
+          camera.position.z = nextZ;
+        }
+
+        const distFromPlanetCenter = Math.hypot(camera.position.x, camera.position.z);
+        if (distFromPlanetCenter > worldBoundRadius) {
+          const scale = (worldBoundRadius - 1.5) / distFromPlanetCenter;
+          camera.position.x = -camera.position.x * scale;
+          camera.position.z = -camera.position.z * scale;
+        }
+      }
+
+      const targetGroundY = getLittlePlanetHeight(camera.position.x, camera.position.z);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, targetGroundY + 1.85, 10, delta);
+
+      // Water Ripple Animation
+      const wPos = pondWaterGeo.attributes.position;
+      for (let i = 0; i < wPos.count; i++) {
+        const origY = pondOriginalY[i];
+        const wx = wPos.getX(i) + pondCenter.x;
+        const wz = wPos.getZ(i) + pondCenter.y;
+        wPos.setY(i, origY + Math.sin(wx * 1.8 + elapsed * 2.2) * 0.025);
+      }
+      pondWaterGeo.attributes.position.needsUpdate = true;
+
+      // Animal Idle Breathing & Proximity Detection
+      const playerXZ = new THREE.Vector2(camera.position.x, camera.position.z);
       for (const animal of forestAnimals) {
-        animal.group.position.y = animal.posY + Math.sin(elapsed * 1.6 + animal.phase) * 0.025;
+        animal.group.position.y = animal.posY + Math.sin(elapsed * 1.8 + animal.phase) * 0.02;
 
-        const inside = playerXZ.distanceTo(new THREE.Vector2(animal.posX, animal.posZ)) < animal.zoneRadius;
-        if (inside && !animal.wasInside && elapsed - animal.lastSoundAt > 5.0) {
+        const distance = playerXZ.distanceTo(new THREE.Vector2(animal.posX, animal.posZ));
+        const inside = distance < animal.zoneRadius;
+        if (inside && !animal.wasInside && elapsed - animal.lastSoundAt > 5.5) {
           triggerAnimalSound(animal);
           animal.lastSoundAt = elapsed;
         }
         animal.wasInside = inside;
       }
 
-      composer.render();
+      // Prop Animations
+      for (const prop of interactiveProps) {
+        if (prop.animTimer > 0) {
+          prop.animTimer = Math.max(0, prop.animTimer - delta * 3.4);
+          const bounce = Math.sin(prop.animTimer * Math.PI) * 0.35;
+          prop.group.scale.set(
+            prop.originalScale.x * (1 + bounce),
+            prop.originalScale.y * (1 - bounce * 0.45),
+            prop.originalScale.z * (1 + bounce)
+          );
+        } else {
+          prop.group.scale.copy(prop.originalScale);
+        }
+      }
+
+      if (composer && bloomRef.current) {
+        composer.render();
+      } else {
+        renderer.render(scene, camera);
+      }
     };
 
     renderLoop();
 
     return () => {
       cancelAnimationFrame(animFrameId);
-      window.removeEventListener('click', onClick);
+      window.removeEventListener('click', onSceneClick);
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('resize', onResize);
+
+      terrainGeo.dispose();
+      terrainMat.dispose();
+      wireMat.dispose();
+      atmoGeo.dispose();
+      atmoMat.dispose();
+      pondWaterGeo.dispose();
+      pondWaterMat.dispose();
       renderer.dispose();
     };
   }, []);
 
-  return <div ref={mountRef} className="absolute inset-0 cursor-grab select-none" />;
+  return (
+    <div
+      ref={mountRef}
+      className="absolute inset-0 cursor-grab active:cursor-grabbing select-none overflow-hidden"
+    />
+  );
 };
