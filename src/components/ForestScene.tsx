@@ -6,7 +6,6 @@
  * - Two-Finger Sweep Gesture: swipe horizontally with 2 fingers to cycle biomes & DSP profiles
  * - UnrealBloomPass post-processing for lucid bioluminescent atmosphere
  * - Clustered dense mystical groves (Pines, Stumps, Logs, Stones, Bushes, Glowing Spore Mushrooms)
- * - Forest floor life: Saplings, Ferns, Glass Blooms, Twigs and Dripping Moss, each with its own sound
  * - Dynamic ground splash with omnidirectional point light flare, shockwaves & spark fountains
  */
 
@@ -40,55 +39,9 @@ interface ForestSceneProps {
   ) => void;
 }
 
-type PropType =
-  | 'tree'
-  | 'stump'
-  | 'log'
-  | 'stone'
-  | 'bush'
-  | 'mushroom'
-  | 'sapling'
-  | 'fern'
-  | 'flower'
-  | 'twig'
-  | 'moss';
-
-// The type names the rest of the app already understands (used for the "last played" display)
-type ReportedType = 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom';
-
-const toReportedType = (t: PropType): ReportedType => {
-  switch (t) {
-    case 'sapling':
-      return 'tree';
-    case 'fern':
-      return 'bush';
-    case 'flower':
-      return 'mushroom';
-    case 'twig':
-      return 'log';
-    case 'moss':
-      return 'stone';
-    default:
-      return t;
-  }
-};
-
-// While Auto Roam is on, walking past these objects plays them automatically.
-// Add 'sapling', 'fern', 'flower', 'twig' or 'moss' here if you want the floor to play itself too.
-const AUTO_PLAY_TYPES = new Set<PropType>(['tree', 'mushroom', 'stump', 'log', 'stone', 'bush']);
-
-// The Space pulse plays at most this many nearby objects (keeps it musical with a busy floor)
-const MAX_PULSE_SOUNDS = 16;
-
-interface SwayParams {
-  seed: number;
-  amp: number;
-  speed: number;
-}
-
 interface InteractiveProp {
   group: THREE.Group;
-  type: PropType;
+  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom';
   originalScale: THREE.Vector3;
   animTimer: number;
   freq: number;
@@ -96,7 +49,6 @@ interface InteractiveProp {
   name: string;
   glowMesh?: THREE.Mesh;
   subtype?: number;
-  sway?: SwayParams;
 }
 
 interface ShockwaveRing {
@@ -331,8 +283,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       noteName: string,
       name: string,
       glowMesh?: THREE.Mesh,
-      subtype?: number,
-      sway?: SwayParams
+      subtype?: number
     ) => {
       group.userData = { isProp: true, type, freq, noteName, name, subtype };
       scene.add(group);
@@ -347,7 +298,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         name,
         glowMesh,
         subtype,
-        sway,
       });
     };
 
@@ -547,234 +497,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       bushGroup.position.set(pos.x, pos.y, pos.z);
 
       registerProp(bushGroup, 'bush', 850, 'Rustle', `Foliage Bush #${i + 1}`);
-    }
-
-    // ------------------------------------------------------------------
-    // FOREST FLOOR LIFE
-    // Small, soft details that fill the ground between the big props.
-    // To change how many of each appear, edit the *Count numbers below.
-    // ------------------------------------------------------------------
-    const floorGeos: THREE.BufferGeometry[] = [];
-    const floorMats: THREE.Material[] = [];
-    const flowerHeadMats: THREE.Material[] = [];
-    const trackGeo = <T extends THREE.BufferGeometry>(g: T): T => {
-      floorGeos.push(g);
-      return g;
-    };
-    const trackMat = <T extends THREE.Material>(m: T): T => {
-      floorMats.push(m);
-      return m;
-    };
-
-    // Floor materials
-    const saplingLeafMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(
-          initialTheme.foliageHue,
-          0.7,
-          Math.min(0.7, initialTheme.foliageLightness + 0.08)
-        ),
-        roughness: 0.4,
-        metalness: 0.15,
-      })
-    );
-    const fernMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.65, initialTheme.foliageLightness * 1.05),
-        roughness: 0.55,
-      })
-    );
-    const stemMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x2f5d3a, roughness: 0.7 }));
-    const twigMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.9 }));
-    const mossMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.5, initialTheme.foliageLightness * 0.55),
-        roughness: 0.95,
-      })
-    );
-    const flowerHeadBaseMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.3,
-        emissive: new THREE.Color(initialTheme.sporeColor),
-        emissiveIntensity: 0.9,
-      })
-    );
-    // Invisible, slightly larger "tap targets" so tiny objects are easy to click
-    const hitMat = trackMat(new THREE.MeshBasicMaterial({ visible: false }));
-
-    // Floor geometries (shared by every object of that kind)
-    const hitGeo = trackGeo(new THREE.SphereGeometry(1, 8, 6));
-    const saplingTrunkGeo = trackGeo(new THREE.CylinderGeometry(0.06, 0.1, 1.1, 5));
-    const saplingLowerGeo = trackGeo(new THREE.ConeGeometry(0.55, 1.0, 6));
-    const saplingUpperGeo = trackGeo(new THREE.ConeGeometry(0.38, 0.8, 6));
-    const fernBladeGeo = trackGeo(new THREE.ConeGeometry(0.07, 1.0, 4));
-    const flowerStemGeo = trackGeo(new THREE.CylinderGeometry(0.025, 0.03, 0.7, 5));
-    const flowerHeadGeo = trackGeo(new THREE.IcosahedronGeometry(0.16, 0));
-    const twigGeo = trackGeo(new THREE.CylinderGeometry(0.035, 0.05, 1.4, 5));
-    const mossGeo = trackGeo(new THREE.SphereGeometry(0.6, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2));
-
-    // Place near a grove, or (scatter = chance from 0 to 1) anywhere on the planet
-    const getFloorPosition = (index: number, groveRadius: number, scatter: number) => {
-      if (Math.random() < scatter) {
-        const angle = Math.random() * Math.PI * 2;
-        const r = Math.sqrt(Math.random()) * 56;
-        const x = Math.cos(angle) * r;
-        const z = Math.sin(angle) * r;
-        return { x, z, y: getLittlePlanetHeight(x, z) };
-      }
-      return getClusteredPosition(index, groveRadius);
-    };
-
-    const addHitProxy = (group: THREE.Group, radius: number, y: number) => {
-      const hit = new THREE.Mesh(hitGeo, hitMat);
-      hit.scale.setScalar(radius);
-      hit.position.y = y;
-      group.add(hit);
-    };
-
-    // --- G. Young Pine Saplings (small trees, soft kalimba pluck) ---
-    const saplingCount = 46;
-    for (let i = 0; i < saplingCount; i++) {
-      const g = new THREE.Group();
-      const s = 0.7 + Math.random() * 0.5;
-
-      const trunk = new THREE.Mesh(saplingTrunkGeo, trunkMat);
-      trunk.position.y = 0.55;
-      const lower = new THREE.Mesh(saplingLowerGeo, saplingLeafMat);
-      lower.position.y = 1.15;
-      lower.rotation.y = Math.random();
-      const upper = new THREE.Mesh(saplingUpperGeo, saplingLeafMat);
-      upper.position.y = 1.7;
-      upper.rotation.y = Math.random();
-
-      g.add(trunk, lower, upper);
-      addHitProxy(g, 1.0, 1.0);
-      g.scale.setScalar(s);
-
-      const pos = getFloorPosition(i + 3, 24, 0.25);
-      g.position.set(pos.x, pos.y, pos.z);
-      g.rotation.y = Math.random() * Math.PI * 2;
-
-      const note = getModeNote(i + 6);
-      registerProp(g, 'sapling', note.freq * 2, note.noteName, `Sapling Pluck (${note.name})`, undefined, undefined, {
-        seed: Math.random() * 100,
-        amp: 0.035,
-        speed: 0.9 + Math.random() * 0.5,
-      });
-    }
-
-    // --- H. Whisper Ferns (a fan of leaves, airy brush sound) ---
-    const fernCount = 36;
-    for (let i = 0; i < fernCount; i++) {
-      const g = new THREE.Group();
-      const s = 0.7 + Math.random() * 0.6;
-      const blades = 7;
-
-      for (let b = 0; b < blades; b++) {
-        const pivot = new THREE.Group();
-        pivot.rotation.set(0, (b / blades) * Math.PI * 2 + Math.random() * 0.4, 0.4 + Math.random() * 0.5);
-        const length = 0.7 + Math.random() * 0.5;
-        const blade = new THREE.Mesh(fernBladeGeo, fernMat);
-        blade.scale.y = length;
-        blade.position.y = 0.5 * length; // keeps the base of the leaf at the middle of the fern
-        pivot.add(blade);
-        g.add(pivot);
-      }
-
-      addHitProxy(g, 0.9, 0.5);
-      g.scale.setScalar(s);
-
-      const pos = getFloorPosition(i + 7, 22, 0.2);
-      g.position.set(pos.x, pos.y, pos.z);
-      g.rotation.y = Math.random() * Math.PI * 2;
-
-      const note = getModeNote(i + 9);
-      registerProp(g, 'fern', note.freq, note.noteName, `Whisper Fern (${note.name})`, undefined, undefined, {
-        seed: Math.random() * 100,
-        amp: 0.05,
-        speed: 0.7 + Math.random() * 0.5,
-      });
-    }
-
-    // --- I. Glass Blooms (tiny glowing flowers, music-box bell) ---
-    const flowerCount = 44;
-    for (let i = 0; i < flowerCount; i++) {
-      const g = new THREE.Group();
-      const s = 0.8 + Math.random() * 0.7;
-
-      const stem = new THREE.Mesh(flowerStemGeo, stemMat);
-      stem.position.y = 0.35;
-
-      // Each flower gets its own head material so only the tapped flower flashes
-      const headMat = flowerHeadBaseMat.clone();
-      headMat.color.setHSL(Math.random(), 0.4, 0.85);
-      flowerHeadMats.push(headMat);
-      const head = new THREE.Mesh(flowerHeadGeo, headMat);
-      head.position.y = 0.78;
-
-      g.add(stem, head);
-      addHitProxy(g, 0.5, 0.55);
-      g.scale.setScalar(s);
-
-      const pos = getFloorPosition(i + 11, 26, 0.45);
-      g.position.set(pos.x, pos.y, pos.z);
-      g.rotation.y = Math.random() * Math.PI * 2;
-
-      const note = getModeNote(i + 3);
-      registerProp(g, 'flower', note.freq * 2, note.noteName, `Glass Bloom (${note.name})`, head, undefined, {
-        seed: Math.random() * 100,
-        amp: 0.06,
-        speed: 1.0 + Math.random() * 0.6,
-      });
-    }
-
-    // --- J. Snapping Twigs (dry sticks lying on the ground, wooden snap) ---
-    const twigCount = 30;
-    for (let i = 0; i < twigCount; i++) {
-      const g = new THREE.Group();
-      const pieces = 2 + Math.floor(Math.random() * 2);
-
-      for (let p = 0; p < pieces; p++) {
-        const t = new THREE.Mesh(twigGeo, twigMat);
-        t.rotation.set(0, (Math.random() - 0.5) * 1.6, Math.PI / 2);
-        t.scale.y = 0.6 + Math.random() * 0.6;
-        t.position.set((Math.random() - 0.5) * 0.4, 0.06 + p * 0.05, (Math.random() - 0.5) * 0.4);
-        g.add(t);
-      }
-
-      addHitProxy(g, 0.8, 0.1);
-
-      const pos = getFloorPosition(i + 14, 24, 0.5);
-      g.position.set(pos.x, pos.y, pos.z);
-      g.rotation.y = Math.random() * Math.PI * 2;
-
-      const note = getModeNote(i + 5);
-      registerProp(g, 'twig', note.freq * 0.9, note.noteName, `Snapping Twig (${note.name})`);
-    }
-
-    // --- K. Dripping Moss (soft green mounds, water-drop sound) ---
-    const mossCount = 30;
-    for (let i = 0; i < mossCount; i++) {
-      const g = new THREE.Group();
-      const clumps = 3;
-
-      for (let c = 0; c < clumps; c++) {
-        const m = new THREE.Mesh(mossGeo, mossMat);
-        const r = 0.6 + Math.random() * 0.6;
-        m.scale.set(r, r * 0.5, r);
-        m.position.set((Math.random() - 0.5) * 0.9, 0, (Math.random() - 0.5) * 0.9);
-        g.add(m);
-      }
-
-      addHitProxy(g, 0.9, 0.15);
-
-      const pos = getFloorPosition(i + 17, 22, 0.15);
-      g.position.set(pos.x, pos.y, pos.z);
-      g.rotation.y = Math.random() * Math.PI * 2;
-
-      const note = getModeNote(i + 8);
-      registerProp(g, 'moss', note.freq * 0.6, note.noteName, `Dripping Moss (${note.name})`);
     }
 
     // 8. Fireflies System (130+ particles)
@@ -1104,7 +826,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
       if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
       if ('touches' in e && e.touches.length >= 2) return; // 2 fingers handled by gesture
-      if ('touches' in e && e.touches[0].clientX < window.innerWidth * 0.5) return;
+      if ('touches' in e && e.touches[0].clientX < window.innerWidth * 0.65) return; // left 65% is reserved for the virtual joystick
 
       isDragging = true;
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -1175,24 +897,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         case 'bush':
           audioEngine.triggerBushNoiseImpact(0.85);
           break;
-        case 'sapling':
-          audioEngine.triggerSaplingPluck(prop.freq);
-          break;
-        case 'fern':
-          audioEngine.triggerFernBrush(prop.freq);
-          break;
-        case 'flower':
-          audioEngine.triggerFlowerBell(prop.freq);
-          break;
-        case 'twig':
-          audioEngine.triggerTwigSnap(prop.freq);
-          break;
-        case 'moss':
-          audioEngine.triggerMossDrip(prop.freq);
-          break;
       }
 
-      onObjectPlayedRef.current?.(toReportedType(prop.type), prop.name, prop.freq, prop.noteName);
+      onObjectPlayedRef.current?.(prop.type, prop.name, prop.freq, prop.noteName);
     };
 
     const pulseNearbyProps = () => {
@@ -1206,8 +913,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           dist: p.group.position.distanceTo(playerPos),
         }))
         .filter((item) => item.dist < 15)
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, MAX_PULSE_SOUNDS);
+        .sort((a, b) => a.dist - b.dist);
 
       if (nearby.length === 0) {
         audioEngine.triggerGroundSplash(55);
@@ -1328,7 +1034,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         // Proximity Prop Interactivity: Automatically play nearby nature instruments while roaming!
         const playerPos = camera.position;
         for (const prop of interactiveProps) {
-          if (!AUTO_PLAY_TYPES.has(prop.type)) continue;
           const dist = prop.group.position.distanceTo(playerPos);
           if (dist < 3.8) {
             const lastTrig = autoPropTriggers.get(prop) || 0;
@@ -1456,13 +1161,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Animate Interactive Props
       for (const prop of interactiveProps) {
-        // Gentle breeze sway for saplings, ferns and flowers
-        if (prop.sway) {
-          const sw = prop.sway;
-          prop.group.rotation.z = Math.sin(elapsed * sw.speed + sw.seed) * sw.amp;
-          prop.group.rotation.x = Math.cos(elapsed * sw.speed * 0.8 + sw.seed) * sw.amp * 0.6;
-        }
-
         if (prop.animTimer > 0) {
           prop.animTimer = Math.max(0, prop.animTimer - delta * 3.4);
           const bounce = Math.sin(prop.animTimer * Math.PI) * 0.35;
@@ -1533,9 +1231,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       bushMat.dispose();
       mushroomCapMat.dispose();
       mushroomStemMat.dispose();
-      floorGeos.forEach((g) => g.dispose());
-      floorMats.forEach((m) => m.dispose());
-      flowerHeadMats.forEach((m) => m.dispose());
       sparkGeo.dispose();
       sparkMat.dispose();
       renderer.dispose();
