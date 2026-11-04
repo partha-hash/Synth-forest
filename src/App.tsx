@@ -13,7 +13,7 @@ import {
   SynthSettings,
   MUSICAL_MODES,
 } from './types/synth';
-import { Compass } from 'lucide-react';
+import { Compass, Search, Music2, Clock3, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [hasEntered, setHasEntered] = useState<boolean>(false);
@@ -24,7 +24,46 @@ export default function App() {
   const [lastPlayed, setLastPlayed] = useState<ObjectPlayedEvent | null>(null);
   const [joystickVector, setJoystickVector] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showBiomeToast, setShowBiomeToast] = useState<boolean>(false);
+  const [dailyTask, setDailyTask] = useState(() => {
+    const saved = localStorage.getItem('synthForestDailyDiscovery');
+    const parsed = saved ? JSON.parse(saved) : null;
+    if (parsed && Date.now() - parsed.startedAt < 24 * 60 * 60 * 1000) return parsed;
+    return { startedAt: Date.now(), seed: Math.floor(Math.random() * 1000000000), completed: false };
+  });
+  const [discoveryProgress, setDiscoveryProgress] = useState(0);
+  const [rewardMelody, setRewardMelody] = useState<ArrayBuffer | null>(null);
+  const [rewardName, setRewardName] = useState('');
+  const [timeLeft, setTimeLeft] = useState(24 * 60 * 60 * 1000);
   const toastTimerRef = useRef<number | null>(null);
+  const rewardInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('synthForestDailyDiscovery', JSON.stringify(dailyTask));
+    const timer = window.setInterval(() => {
+      const remaining = 24 * 60 * 60 * 1000 - (Date.now() - dailyTask.startedAt);
+      if (remaining <= 0) {
+        setDailyTask({ startedAt: Date.now(), seed: Math.floor(Math.random() * 1000000000), completed: false });
+        setDiscoveryProgress(0);
+      } else setTimeLeft(remaining);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [dailyTask]);
+
+  const handleDiscoveryProgress = useCallback((progress: number) => {
+    setDiscoveryProgress((old) => Math.abs(old - progress) > 0.035 ? progress : old);
+    if (progress >= 1 && !dailyTask.completed) {
+      setDailyTask((task) => ({ ...task, completed: true }));
+      if (rewardMelody) void audioEngine.playDiscoveryReward(rewardMelody);
+      else audioEngine.triggerAnimalChord(392, 5);
+    }
+  }, [dailyTask.completed, rewardMelody]);
+
+  const handleRewardUpload = async (file?: File) => {
+    if (!file) return;
+    if (!/audio\/(mpeg|wav|x-wav|mp4|ogg)/.test(file.type) && !/\.(mp3|wav|m4a|ogg)$/i.test(file.name)) return;
+    setRewardName(file.name);
+    setRewardMelody(await file.arrayBuffer());
+  };
 
   const handleEnter = async () => {
     const success = await audioEngine.initAudio();
@@ -156,6 +195,9 @@ export default function App() {
         bloomEnabled={synthSettings.bloomEnabled}
         isAutoExploring={isAutoExploring}
         joystickVector={joystickVector}
+        discoverySeed={dailyTask.seed}
+        discoveryCompleted={dailyTask.completed}
+        onDiscoveryProgress={handleDiscoveryProgress}
         onThemeCycle={handleThemeChange}
         onObjectPlayed={handleObjectPlayed}
       />
@@ -199,6 +241,24 @@ export default function App() {
           <span className="italic text-emerald-200/90 font-light tracking-wide">&ldquo;you don&apos;t play you listen.&rdquo;</span>
         </div>
       </div>
+
+      {hasEntered && (
+        <div className="fixed right-3 top-16 z-40 w-60 sm:w-72 rounded-2xl border border-amber-300/25 bg-[#10170f]/90 p-3 text-amber-50 shadow-xl backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wide"><Search className="h-4 w-4 text-amber-300"/> DAILY FOREST FIND</div>
+            <div className="flex items-center gap-1 text-[10px] font-mono text-amber-200/80"><Clock3 className="h-3 w-3"/>{Math.floor(timeLeft/3600000)}h {Math.floor((timeLeft%3600000)/60000)}m</div>
+          </div>
+          <p className="mt-1 text-[11px] text-white/70">Find today's hidden glowing object. Follow its growing light and sound.</p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-300 transition-all" style={{width:`${dailyTask.completed ? 100 : discoveryProgress*100}%`}}/></div>
+          <div className="mt-2 flex items-center justify-between text-[10px]">{dailyTask.completed ? <span className="flex items-center gap-1 text-emerald-300"><CheckCircle2 className="h-3 w-3"/> Found — reward unlocked</span> : <span className="text-amber-100/70">{Math.round(discoveryProgress*100)}% proximity</span>}</div>
+          <div className="mt-2 flex items-center gap-2">
+            <button onClick={() => rewardInputRef.current?.click()} className="flex items-center gap-1 rounded-lg border border-white/15 px-2 py-1.5 text-[10px] hover:bg-white/10"><Music2 className="h-3 w-3"/> Add melody reward</button>
+            <span className="min-w-0 truncate text-[9px] text-white/50">{rewardName || 'No melody loaded'}</span>
+            <input ref={rewardInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg" className="hidden" onChange={(e) => handleRewardUpload(e.target.files?.[0])}/>
+          </div>
+          {dailyTask.completed && rewardMelody && <button onClick={() => void audioEngine.playDiscoveryReward(rewardMelody)} className="mt-2 w-full rounded-lg bg-amber-300/20 py-1.5 text-[10px] text-amber-100">Play unlocked melody</button>}
+        </div>
+      )}
 
       {hasEntered && (
         <ControlDock
