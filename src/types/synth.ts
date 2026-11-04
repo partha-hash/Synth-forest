@@ -374,7 +374,7 @@ export const DEFAULT_SYNTH_SETTINGS: SynthSettings = {
   ambientWindVolume: 0, // Strict zero hiss by default
   isPadEnabled: false, // Default pad to false - completely silent until activated!
   isMelodyPlaying: false,
-  melodyBpm: 108,
+  melodyBpm: 90,
   selectedMode: 'dorian',
   bloomEnabled: true,
   isAutoExploring: false,
