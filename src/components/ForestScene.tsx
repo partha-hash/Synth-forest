@@ -634,12 +634,22 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       { x: -2, z: 36 },
     ];
 
+    // Keep a clear habitat pocket around every animal so foliage and props never
+    // obscure the low-poly silhouettes. Retry random placements, then use a safe fallback.
     const getClusteredPosition = (index: number, maxRadius: number) => {
       const grove = groveCenters[index % groveCenters.length];
-      const offsetRadius = Math.random() * maxRadius;
-      const angle = Math.random() * Math.PI * 2;
-      const x = grove.x + Math.cos(angle) * offsetRadius;
-      const z = grove.z + Math.sin(angle) * offsetRadius;
+      let x = grove.x;
+      let z = grove.z;
+      for (let attempt = 0; attempt < 36; attempt++) {
+        const offsetRadius = Math.random() * maxRadius;
+        const angle = Math.random() * Math.PI * 2;
+        x = grove.x + Math.cos(angle) * offsetRadius;
+        z = grove.z + Math.sin(angle) * offsetRadius;
+        const clearOfAnimals = forestAnimals.every((animal) =>
+          Math.hypot(x - animal.anchorX, z - animal.anchorZ) > 9.0
+        );
+        if (clearOfAnimals) break;
+      }
       return { x, z, y: getLittlePlanetHeight(x, z) };
     };
 
@@ -654,9 +664,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       trunk.position.y = 1.2 * scaleRatio;
       treeGroup.add(trunk);
 
-      const isBroadleaf = i % 4 === 0;
+      const treeKind = i % 3; // 0: crystal pine, 1: broadleaf, 2: layered cedar
       let topper: THREE.Mesh;
-      if (isBroadleaf) {
+      if (treeKind === 1) {
         // Clustered faceted crowns add the rounded low-poly deciduous trees from the references.
         const crownMat = new THREE.MeshStandardMaterial({
           color: i % 8 === 0 ? 0x6f9b58 : 0x83a963, roughness: 0.9,
@@ -674,6 +684,22 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         const topperMat = new THREE.MeshBasicMaterial({ color: initialTheme.fireflyColor, wireframe: true });
         topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.28 * scaleRatio, 0), topperMat);
         topper.position.y = 5.0 * scaleRatio;
+      } else if (treeKind === 2) {
+        const cedarMat = new THREE.MeshStandardMaterial({ color: 0x547c68, roughness: 0.92, flatShading: true });
+        const layers = [
+          { r: 2.15, h: 1.8, y: 2.0 },
+          { r: 1.7, h: 1.65, y: 3.15 },
+          { r: 1.2, h: 1.45, y: 4.25 },
+        ];
+        layers.forEach((layer, idx) => {
+          const foliage = new THREE.Mesh(new THREE.ConeGeometry(layer.r * scaleRatio, layer.h * scaleRatio, 5), cedarMat);
+          foliage.position.y = layer.y * scaleRatio;
+          foliage.rotation.y = idx * 0.45;
+          treeGroup.add(foliage);
+        });
+        const topperMat = new THREE.MeshBasicMaterial({ color: 0x9ccf9b, wireframe: true });
+        topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.32 * scaleRatio, 0), topperMat);
+        topper.position.y = 5.2 * scaleRatio;
       } else {
         const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1 * scaleRatio, 2.6 * scaleRatio, 6), pineMat);
         f1.position.y = 2.4 * scaleRatio; f1.rotation.y = Math.random();
@@ -693,38 +719,48 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       treeGroup.rotation.y = Math.random() * Math.PI * 2;
 
       const note = getModeNote(i);
-      registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.name})`, topper);
+      const treeNames = ['Crystal Pine', 'Amber Canopy', 'Moss Cedar'];
+      registerProp(treeGroup, 'tree', note.freq, note.noteName, `${treeNames[treeKind]} (${note.name})`, topper, treeKind);
     }
 
     // --- B. Bioluminescent Spore Mushrooms ---
     const mushroomCount = 26;
     const mushroomSubtypeNames = [
-      'Liquid Bubble Spore',
-      'Lucid FM Bell',
-      'Deep Fungal Thump',
-      'Crystal Spore Shimmer',
+      'Mooncup Fungus', 'Amber Bell Fungus', 'Deep Earth Puffball',
+      'Crystal Fan Fungus', 'Scarlet Parasol', 'Ghost Shelf Fungus',
     ];
 
     for (let i = 0; i < mushroomCount; i++) {
       const shroomGroup = new THREE.Group();
       const mScale = 0.75 + Math.random() * 0.6;
-      const subtype = i % 4;
-
+      const subtype = i % 6;
+      const fungusPalette = [0x77c9b0, 0xd99a52, 0x8c9bc9, 0x8fd4e0, 0xc65d65, 0xd8d6c8];
+      const capMat = new THREE.MeshStandardMaterial({
+        color: fungusPalette[subtype], roughness: 0.72, flatShading: true,
+        emissive: fungusPalette[subtype], emissiveIntensity: 0.12,
+      });
+      const stemMat = subtype === 2 || subtype === 5 ? mushroomStemMat : new THREE.MeshStandardMaterial({ color: 0xe1d7bd, roughness: 0.9, flatShading: true });
       const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18 * mScale, 0.28 * mScale, 1.2 * mScale, 8),
-        mushroomStemMat
+        new THREE.CylinderGeometry(0.14 * mScale, 0.25 * mScale, 0.95 * mScale, 6), stemMat
       );
-      stem.position.y = 0.6 * mScale;
-
-      const cap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.85 * mScale, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
-        mushroomCapMat
-      );
-      cap.position.y = 1.2 * mScale;
+      stem.position.y = 0.47 * mScale;
+      let cap: THREE.Mesh;
+      if (subtype === 2) {
+        cap = new THREE.Mesh(new THREE.IcosahedronGeometry(0.58 * mScale, 0), capMat);
+      } else if (subtype === 3 || subtype === 5) {
+        cap = new THREE.Mesh(new THREE.ConeGeometry(0.78 * mScale, 0.5 * mScale, 5), capMat);
+        cap.rotation.x = Math.PI;
+      } else if (subtype === 4) {
+        cap = new THREE.Mesh(new THREE.SphereGeometry(0.78 * mScale, 7, 5), capMat);
+        cap.scale.y = 0.55;
+      } else {
+        cap = new THREE.Mesh(new THREE.SphereGeometry(0.78 * mScale, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.52), capMat);
+      }
+      cap.position.y = 0.98 * mScale;
 
       const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const dot = new THREE.Mesh(new THREE.SphereGeometry(0.12 * mScale, 6, 6), dotMat);
-      dot.position.set(0.3 * mScale, 1.6 * mScale, 0.3 * mScale);
+      dot.position.set(0.3 * mScale, 1.23 * mScale, 0.3 * mScale);
 
       shroomGroup.add(stem, cap, dot);
 
@@ -733,7 +769,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       shroomGroup.rotation.y = Math.random() * Math.PI * 2;
 
       const note = getModeNote(i + 4);
-      const freqMultiplier = subtype === 2 ? 0.75 : 1.25;
+      const freqMultiplier = subtype === 2 ? 0.72 : (subtype === 5 ? 0.92 : 1.18);
       registerProp(
         shroomGroup,
         'mushroom',
@@ -1253,7 +1289,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       switch (prop.type) {
         case 'tree':
-          audioEngine.triggerTreeTap(prop.freq);
+          audioEngine.triggerTreeTap(prop.freq, prop.subtype ?? 0);
           break;
         case 'mushroom':
           audioEngine.triggerMushroomSound(prop.freq, prop.subtype ?? 0);
