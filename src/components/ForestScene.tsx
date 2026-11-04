@@ -504,45 +504,46 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     for (let i = 0; i < posPond.count; i++) {
       const worldX = pondCenter.x + posPond.getX(i);
       const worldZ = pondCenter.y - posPond.getY(i);
-      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.035);
+      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.14);
     }
     posPond.needsUpdate = true;
     pondGeo.computeVertexNormals();
     pondGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    const pondWaterMat = new THREE.MeshStandardMaterial({
-      roughness: 0.15,
-      metalness: 0.10,
+    // Use an unlit, opaque-enough water surface so the pond remains visible
+    // in dark biomes and is not lost against the terrain lighting.
+    const pondWaterMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.94,
       vertexColors: true,
       side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
     });
 
     const pondWater = new THREE.Mesh(pondGeo, pondWaterMat);
     pondWater.rotation.x = -Math.PI / 2;
     pondWater.position.set(pondCenter.x, pondY, pondCenter.y);
+    pondWater.renderOrder = 3;
     scene.add(pondWater);
 
-    // Earthy Moss Shoreline Ring
-    const shoreGeo = new THREE.ShapeGeometry(pondShape, 24);
-    const shorePos = shoreGeo.attributes.position;
-    for (let i = 0; i < shorePos.count; i++) {
-      const worldX = pondCenter.x + shorePos.getX(i);
-      const worldZ = pondCenter.y - shorePos.getY(i);
-      shorePos.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.012);
-    }
-    shorePos.needsUpdate = true;
-    shoreGeo.computeVertexNormals();
-    const shoreMat = new THREE.MeshStandardMaterial({
-      color: 0x3d543b,
-      roughness: 0.95,
-      wireframe: true,
+    // Draw only the shoreline outline (not a wireframe-filled second surface).
+    const shorePoints: THREE.Vector3[] = pondBoundaryPoints.map((pt) => new THREE.Vector3(
+      pt.x,
+      getLittlePlanetHeight(pt.x, pt.y) + 0.17,
+      pt.y,
+    ));
+    const shoreGeo = new THREE.BufferGeometry().setFromPoints(shorePoints);
+    const shoreMat = new THREE.LineBasicMaterial({
+      color: 0x83a96b,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+      toneMapped: false,
     });
-    const shoreRing = new THREE.Mesh(shoreGeo, shoreMat);
-    shoreRing.rotation.x = -Math.PI / 2;
-    shoreRing.position.set(pondCenter.x, pondY, pondCenter.y);
-    shoreRing.scale.set(1.05, 1.05, 1.05);
+    const shoreRing = new THREE.LineLoop(shoreGeo, shoreMat);
+    shoreRing.renderOrder = 4;
     scene.add(shoreRing);
 
     // Pond Plants (Lotus & Cattails)
