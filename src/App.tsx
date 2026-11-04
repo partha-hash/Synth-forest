@@ -149,7 +149,7 @@ export default function App() {
   const activeModeObj = MUSICAL_MODES[synthSettings.selectedMode] || MUSICAL_MODES.dorian;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black font-sans select-none">
+    <div className="lowpoly-ui relative w-screen h-screen overflow-hidden bg-black font-sans select-none">
       <ForestScene
         currentTheme={currentTheme}
         selectedMode={synthSettings.selectedMode}

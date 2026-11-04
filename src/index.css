@@ -40,3 +40,48 @@ html, body, #root {
   font-family: 'Chakra Petch', monospace;
   letter-spacing: 0.04em;
 }
+
+
+/* Low-poly woodland interface: restrained surfaces keep attention on the sound. */
+.lowpoly-ui {
+  --forest-ink: #18251b;
+  --forest-panel: rgba(24, 37, 27, 0.96);
+  --forest-line: rgba(180, 194, 138, 0.28);
+  --forest-accent: #a8b77a;
+  --forest-text: #f0ead8;
+}
+.lowpoly-panel {
+  border-radius: 12px !important;
+  border-color: var(--forest-line) !important;
+  background: var(--forest-panel) !important;
+  box-shadow: 0 10px 28px rgba(5, 10, 6, 0.28) !important;
+  backdrop-filter: blur(10px) !important;
+}
+.lowpoly-button {
+  border-radius: 7px !important;
+  border-color: rgba(180, 194, 138, 0.58) !important;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease !important;
+}
+.lowpoly-ui button {
+  text-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lowpoly-ui *, .lowpoly-ui *::before, .lowpoly-ui *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Re-tone the existing utility-driven controls without changing their behavior. */
+.lowpoly-ui [class*="text-emerald-"] { color: #c7d2a8 !important; }
+.lowpoly-ui [class*="border-emerald-"] { border-color: rgba(180, 194, 138, 0.28) !important; }
+.lowpoly-ui [class*="bg-emerald-500"] { background-color: rgba(139, 157, 94, 0.22) !important; }
+.lowpoly-ui [class*="bg-emerald-950"] { background-color: rgba(22, 34, 23, 0.82) !important; }
+.lowpoly-ui button {
+  border-radius: 7px;
+}
+.lowpoly-ui button:focus-visible, .lowpoly-ui input:focus-visible, .lowpoly-ui select:focus-visible {
+  outline: 2px solid rgba(196, 211, 151, 0.8);
+  outline-offset: 2px;
+}
