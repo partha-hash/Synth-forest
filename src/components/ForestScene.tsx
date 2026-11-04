@@ -207,6 +207,19 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const z = posAttr.getZ(i);
       posAttr.setY(i, getLittlePlanetHeight(x, z));
     }
+    // Cut a real opening in the terrain for the sunken pond basin.
+    // The same geometry is shared by the terrain wire overlay, so neither can cover the water.
+    const terrainIndex = terrainGeo.getIndex();
+    if (terrainIndex) {
+      const kept: number[] = [];
+      for (let i = 0; i < terrainIndex.count; i += 3) {
+        const ia = terrainIndex.getX(i), ib = terrainIndex.getX(i + 1), ic = terrainIndex.getX(i + 2);
+        const cx = (posAttr.getX(ia) + posAttr.getX(ib) + posAttr.getX(ic)) / 3;
+        const cz = (posAttr.getZ(ia) + posAttr.getZ(ib) + posAttr.getZ(ic)) / 3;
+        if (Math.hypot(cx, cz) > 8.9) kept.push(ia, ib, ic);
+      }
+      terrainGeo.setIndex(kept);
+    }
     terrainGeo.computeVertexNormals();
 
     const terrainMat = new THREE.MeshStandardMaterial({
@@ -229,6 +242,45 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const wireMesh = new THREE.Mesh(terrainGeo, wireMat);
     wireMesh.position.y += 0.04;
     scene.add(wireMesh);
+
+    // Sunken pond banks: concentric sloped rings descend from the ground into the basin.
+    const bankSegments = 64;
+    const bankRings = [
+      { radius: 8.9, drop: 0.02, color: new THREE.Color(0x68734a) },
+      { radius: 7.6, drop: 0.20, color: new THREE.Color(0x536344) },
+      { radius: 6.35, drop: 0.72, color: new THREE.Color(0x66533b) },
+      { radius: 5.55, drop: 0.92, color: new THREE.Color(0x3d5143) },
+    ];
+    const bankPositions: number[] = [];
+    const bankColors: number[] = [];
+    const bankIndices: number[] = [];
+    for (const ring of bankRings) {
+      for (let i = 0; i < bankSegments; i++) {
+        const a = (i / bankSegments) * Math.PI * 2;
+        const x = Math.cos(a) * ring.radius;
+        const z = Math.sin(a) * ring.radius;
+        bankPositions.push(x, getLittlePlanetHeight(x, z) - ring.drop, z);
+        bankColors.push(ring.color.r, ring.color.g, ring.color.b);
+      }
+    }
+    for (let r = 0; r < bankRings.length - 1; r++) {
+      for (let i = 0; i < bankSegments; i++) {
+        const a = r * bankSegments + i;
+        const b = r * bankSegments + (i + 1) % bankSegments;
+        const c = (r + 1) * bankSegments + i;
+        const d = (r + 1) * bankSegments + (i + 1) % bankSegments;
+        bankIndices.push(a, c, b, b, c, d);
+      }
+    }
+    const bankGeo = new THREE.BufferGeometry();
+    bankGeo.setAttribute('position', new THREE.Float32BufferAttribute(bankPositions, 3));
+    bankGeo.setAttribute('color', new THREE.Float32BufferAttribute(bankColors, 3));
+    bankGeo.setIndex(bankIndices);
+    bankGeo.computeVertexNormals();
+    const bankMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide });
+    const pondBank = new THREE.Mesh(bankGeo, bankMat);
+    pondBank.renderOrder = 2;
+    scene.add(pondBank);
 
     // Circular Little-Planet Atmospheric Glow Ring
     const atmoGeo = new THREE.RingGeometry(73.5, 76.5, 64);
@@ -473,6 +525,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const pz = pondCenter.y + Math.sin(angle) * r;
       pondBoundaryPoints.push(new THREE.Vector2(px, pz));
     }
+    // Player collision follows the outside lip of the entire ditch, not just the water edge.
+    const pondCollisionBoundaryPoints = pondBoundaryPoints.map((pt) =>
+      new THREE.Vector2(pondCenter.x + (pt.x - pondCenter.x) * 1.65, pondCenter.y + (pt.y - pondCenter.y) * 1.65)
+    );
 
     // Organic Pond Shape
     const pondShape = new THREE.Shape();
@@ -504,7 +560,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     for (let i = 0; i < posPond.count; i++) {
       const worldX = pondCenter.x + posPond.getX(i);
       const worldZ = pondCenter.y - posPond.getY(i);
-      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY + 0.14);
+      posPond.setZ(i, getLittlePlanetHeight(worldX, worldZ) - pondY - 0.92);
     }
     posPond.needsUpdate = true;
     pondGeo.computeVertexNormals();
@@ -514,11 +570,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // in dark biomes and is not lost against the terrain lighting.
     const pondWaterMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      transparent: true,
-      opacity: 0.94,
+      transparent: false,
+      opacity: 1,
       vertexColors: true,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthWrite: true,
       toneMapped: false,
     });
 
@@ -531,7 +587,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // Draw only the shoreline outline (not a wireframe-filled second surface).
     const shorePoints: THREE.Vector3[] = pondBoundaryPoints.map((pt) => new THREE.Vector3(
       pt.x,
-      getLittlePlanetHeight(pt.x, pt.y) + 0.17,
+      getLittlePlanetHeight(pt.x, pt.y) + 0.10,
       pt.y,
     ));
     const shoreGeo = new THREE.BufferGeometry().setFromPoints(shorePoints);
@@ -1505,7 +1561,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
         // Polygon Shoreline Collision Enforcement
         const nextPos = new THREE.Vector2(nextX, nextZ);
-        if (!isPointInPolygon(nextPos, pondBoundaryPoints)) {
+        if (!isPointInPolygon(nextPos, pondCollisionBoundaryPoints)) {
           camera.position.x = nextX;
           camera.position.z = nextZ;
         } else {
@@ -1725,6 +1781,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       animalCone.dispose();
       Object.values(animalMats).forEach((mat) => mat.dispose());
       pondWater.geometry.dispose(); pondWaterMat.dispose();
+      pondBank.geometry.dispose(); bankMat.dispose();
       shoreRing.geometry.dispose(); shoreMat.dispose();
       lotusMat.dispose(); lotusPetalMat.dispose(); cattailMat.dispose(); cattailHeadMat.dispose();
       sparkGeo.dispose();
