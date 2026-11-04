@@ -477,7 +477,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     makeAnimal('cat', 31, -8, 261.63, 10);
     makeAnimal('squirrel', -31, -7, 587.33, 11);
 
-
     // Optimized Organic Pond Setup
     const pondCenter = new THREE.Vector2(0, 0);
     const pondY = getLittlePlanetHeight(pondCenter.x, pondCenter.y);
@@ -1668,7 +1667,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Stationary Wildlife Idle Animations & Proximity Detection
       const playerXZ = new THREE.Vector2(camera.position.x, camera.position.z);
-
       for (const animal of forestAnimals) {
         // Idle Animation (Transforms remain fixed at anchorX, anchorZ)
         const breathe = Math.sin(elapsed * 2.2 + animal.freq) * 0.03;
