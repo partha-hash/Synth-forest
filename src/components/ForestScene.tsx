@@ -817,28 +817,16 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     window.addEventListener('keyup', onKeyUp);
 
     // Mouse / Touch Look Dragging
-    let isDragging = false;
+    // On mobile, the left side controls walking while a second finger on the
+    // right side can look around at the same time.
+    let isMouseDragging = false;
+    let lookTouchId: number | null = null;
     let prevPointerX = 0;
     let prevPointerY = 0;
     let cameraYaw = 0;
     let cameraPitch = 0;
 
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
-      if ('touches' in e && e.touches.length >= 2) return; // 2 fingers handled by gesture
-      if ('touches' in e && e.touches[0].clientX < window.innerWidth * 0.65) return; // left 65% is reserved for the virtual joystick
-
-      isDragging = true;
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      prevPointerX = clientX;
-      prevPointerY = clientY;
-    };
-
-    const onPointerMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDragging) return;
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const applyLookDelta = (clientX: number, clientY: number) => {
       const deltaX = clientX - prevPointerX;
       const deltaY = clientY - prevPointerY;
       prevPointerX = clientX;
@@ -854,8 +842,47 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       camera.rotation.x = cameraPitch;
     };
 
-    const onPointerUp = () => {
-      isDragging = false;
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      if ((e.target as HTMLElement)?.closest('.no-scene-drag')) return;
+
+      if ('touches' in e) {
+        // Pick a newly-started finger on the right 35% for free look.
+        // This also works while the first finger is holding the left joystick.
+        const lookTouch = Array.from(e.changedTouches).find(
+          touch => touch.clientX >= window.innerWidth * 0.65
+        );
+        if (!lookTouch) return;
+        lookTouchId = lookTouch.identifier;
+        prevPointerX = lookTouch.clientX;
+        prevPointerY = lookTouch.clientY;
+        return;
+      }
+
+      isMouseDragging = true;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+    };
+
+    const onPointerMove = (e: MouseEvent | TouchEvent) => {
+      if ('touches' in e) {
+        if (lookTouchId === null) return;
+        const touch = Array.from(e.changedTouches).find(item => item.identifier === lookTouchId);
+        if (!touch) return;
+        applyLookDelta(touch.clientX, touch.clientY);
+        return;
+      }
+      if (!isMouseDragging) return;
+      applyLookDelta(e.clientX, e.clientY);
+    };
+
+    const onPointerUp = (e?: MouseEvent | TouchEvent) => {
+      if (e && 'changedTouches' in e && lookTouchId !== null) {
+        if (Array.from(e.changedTouches).some(item => item.identifier === lookTouchId)) {
+          lookTouchId = null;
+        }
+        return;
+      }
+      isMouseDragging = false;
     };
 
     window.addEventListener('mousedown', onPointerDown);
@@ -863,7 +890,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     window.addEventListener('mouseup', onPointerUp);
     window.addEventListener('touchstart', onPointerDown, { passive: true });
     window.addEventListener('touchmove', onPointerMove, { passive: true });
-    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchend', onPointerUp, { passive: true });
+    window.addEventListener('touchcancel', onPointerUp, { passive: true });
 
     // 12. Sound Triggering on Prop Click
     const raycaster = new THREE.Raycaster();
@@ -1206,6 +1234,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       window.removeEventListener('touchstart', onPointerDown);
       window.removeEventListener('touchmove', onPointerMove);
       window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
       window.removeEventListener('click', onSceneClick);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('synth-tap-tree', handleCustomTreeTap);
