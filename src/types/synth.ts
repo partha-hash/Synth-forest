@@ -231,7 +231,6 @@ export const THEME_KEYS_ORDER: ForestThemeKey[] = [
   'fungal',
 ];
 
-// Fixed selectable musical modes (Diatonic Greek Modes + Pentatonic + Japanese Akebono)
 export type ModeKey =
   | 'ionian'
   | 'dorian'
@@ -248,7 +247,7 @@ export interface MusicalMode {
   name: string;
   greekName: string;
   mood: string;
-  formula: string; // intervals
+  formula: string;
   notes: number[];
   noteNames: string[];
 }
@@ -337,33 +336,31 @@ export const MUSICAL_MODES: Record<ModeKey, MusicalMode> = {
   },
 };
 
-// Aliased ScaleKey for backwards compatibility
 export type ScaleKey = ModeKey;
 export const MUSICAL_SCALES = MUSICAL_MODES;
 
 export interface SynthSettings {
-  masterVolume: number; // 0 to 100
-  padVolume: number; // 0 to 100% volume for sustained drone/pad
-  filterCutoff: number; // 100 to 12000 Hz
-  filterResonance: number; // 0.1 to 15
-  delayTime: number; // 0.05 to 1.2s
-  delayFeedback: number; // 0 to 85%
-  reverbWet: number; // 0 to 100%
-  reeseSubDrive: number; // 0 to 100%
-  subGlide: number; // 20 to 1200ms
-  ambientWindVolume: number; // 0 to 100%
-  isPadEnabled: boolean; // Continuous drone pad ON/OFF control
-  // 4/4 Melody Generator
+  masterVolume: number;
+  padVolume: number;
+  filterCutoff: number;
+  filterResonance: number;
+  delayTime: number;
+  delayFeedback: number;
+  reverbWet: number;
+  reeseSubDrive: number;
+  subGlide: number;
+  ambientWindVolume: number;
+  isPadEnabled: boolean;
   isMelodyPlaying: boolean;
-  melodyBpm: number; // 60 to 180 (4/4 time signature)
+  melodyBpm: number;
   selectedMode: ModeKey;
   bloomEnabled: boolean;
-  isAutoExploring: boolean; // Autonomous camera roaming across forest planet
+  isAutoExploring: boolean;
 }
 
 export const DEFAULT_SYNTH_SETTINGS: SynthSettings = {
   masterVolume: 80,
-  padVolume: 60, // Dedicated Drone/Pad volume
+  padVolume: 60,
   filterCutoff: 5200,
   filterResonance: 3.2,
   delayTime: 0.44,
@@ -371,8 +368,8 @@ export const DEFAULT_SYNTH_SETTINGS: SynthSettings = {
   reverbWet: 75,
   reeseSubDrive: 35,
   subGlide: 650,
-  ambientWindVolume: 0, // Strict zero hiss by default
-  isPadEnabled: false, // Default pad to false - completely silent until activated!
+  ambientWindVolume: 0,
+  isPadEnabled: false,
   isMelodyPlaying: false,
   melodyBpm: 108,
   selectedMode: 'dorian',
@@ -381,7 +378,19 @@ export const DEFAULT_SYNTH_SETTINGS: SynthSettings = {
 };
 
 export interface ObjectPlayedEvent {
-  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'ground';
+  type:
+    | 'tree'
+    | 'stump'
+    | 'log'
+    | 'stone'
+    | 'bush'
+    | 'mushroom'
+    | 'sapling'
+    | 'mossStick'
+    | 'flower'
+    | 'ground'
+    | 'animal'
+    | 'pondPlant';
   label: string;
   noteName: string;
   frequency: number;
