@@ -13,7 +13,7 @@ import {
   SynthSettings,
   MUSICAL_MODES,
 } from './types/synth';
-import { Compass } from 'lucide-react';
+import { Compass, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [hasEntered, setHasEntered] = useState<boolean>(false);
@@ -24,6 +24,8 @@ export default function App() {
   const [lastPlayed, setLastPlayed] = useState<ObjectPlayedEvent | null>(null);
   const [joystickVector, setJoystickVector] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showBiomeToast, setShowBiomeToast] = useState<boolean>(false);
+  const [isEcosystemMode, setIsEcosystemMode] = useState<boolean>(false);
+  const toastTimerRef = useRef<number | null>(null);
   const handleEnter = async () => {
     const success = await audioEngine.initAudio();
     if (success) {
@@ -154,6 +156,7 @@ export default function App() {
         bloomEnabled={synthSettings.bloomEnabled}
         isAutoExploring={isAutoExploring}
         joystickVector={joystickVector}
+        isEcosystemMode={isEcosystemMode}
         onThemeCycle={handleThemeChange}
         onObjectPlayed={handleObjectPlayed}
       />
@@ -191,6 +194,18 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {hasEntered && (
+        <button
+          type="button"
+          onClick={() => setIsEcosystemMode((active) => !active)}
+          aria-pressed={isEcosystemMode}
+          className={`fixed right-3 top-16 z-50 flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-mono font-bold tracking-wide shadow-lg backdrop-blur-xl transition-all ${isEcosystemMode ? 'border-fuchsia-300/60 bg-fuchsia-500/25 text-fuchsia-100 shadow-fuchsia-500/20' : 'border-emerald-300/25 bg-[#03150e]/90 text-emerald-100'}`}
+        >
+          <Sparkles className={`h-4 w-4 ${isEcosystemMode ? 'animate-pulse' : ''}`} />
+          {isEcosystemMode ? 'ECOSYSTEM ON' : 'LIVING ECOSYSTEM'}
+        </button>
+      )}
 
       <div className="fixed top-3 right-3 z-30 hidden sm:flex items-center gap-2 pointer-events-none">
         <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#03150e]/85 border border-emerald-500/25 backdrop-blur-xl shadow-[0_0_20px_rgba(4,40,25,0.4)] text-[11px] font-mono pointer-events-auto">
