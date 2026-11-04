@@ -3,7 +3,6 @@
  * Provides:
  * - 5 Nature Prop Voices (Pine Chimes, Wood Tongue Drums, Marimba Logs, Mineral Stones, Foliage Rustles)
  * - Bioluminescent FM Mushroom Bells
- * - Lush Ambient Animal Chord Engine (Warm multi-voice polyphonic chords per animal species)
  * - Fix for Pad Voice: Proper ADSR Decay & Dedicated ON/OFF Stop Control
  * - 4/4 Algorithmic Melody Generator mapped to fixed Diatonic Greek Modes
  * - Dynamic Biome-driven DSP effects (Reverb, Delay, Resonance, Cutoff, Drive)
@@ -192,7 +191,7 @@ export class AudioEngine {
     this.reverbConvolver.connect(this.reverbWetGain);
     this.reverbWetGain.connect(this.masterFilter);
 
-    // Dedicated Drone/Pad Master Gain Node
+    // Dedicated Drone/Pad Master Gain Node - strictly 0.0 (silent) when not activated
     this.padMasterGain = this.ctx.createGain();
     this.padMasterGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
     this.padMasterGain.connect(this.effectsBus);
@@ -216,80 +215,13 @@ export class AudioEngine {
     return impulse;
   }
 
-  // --- Voice: Dedicated Lush Ambient Animal Chords ---
-  public triggerAnimalChord(rootFreq: number, character: number = 0) {
-    if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-    const root = Math.max(110, Math.min(700, rootFreq));
-
-    // 0: Bunny (Delicate Maj 7), 1: Deer (Warm Maj add9), 2: Bear (Deep Soft Min 7),
-    // 3: Frogs (Sus Ambient), 4: Owl (Mellow Min 9), 5: Night Angel (Airy Shimmer Maj 7),
-    // 6: Asian Cuckoo (Warm Sus), 7: Crickets (High Register Maj 7)
-    const chordVoicings = [
-      [1, 1.25, 1.5, 1.875, 2],       // 0: Delicate Major 7th
-      [1, 1.25, 1.5, 1.875, 2.25],    // 1: Warm Major add9
-      [1, 1.2, 1.5, 1.78, 2],         // 2: Deep Soft Minor 7th
-      [1, 1.333, 1.5, 1.778, 2.25],   // 3: Suspended Ambient Chord
-      [1, 1.2, 1.5, 1.778, 2.25],     // 4: Mellow Minor 9th
-      [1, 1.25, 1.5, 1.875, 2.5],     // 5: Airy Shimmering Major 7th
-      [1, 1.125, 1.5, 1.875, 2.25],   // 6: Warm Suspended Chord
-      [1, 1.25, 1.5, 1.875, 2.0],     // 7: Delicate High-Register Major 7th
-    ];
-
-    const safeCharacter = Math.max(0, Math.min(7, Math.floor(character)));
-    const intervals = chordVoicings[safeCharacter];
-
-    const filter = this.ctx.createBiquadFilter();
-    const master = this.ctx.createGain();
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(safeCharacter === 5 ? 2200 : 1700, now);
-    filter.Q.setValueAtTime(0.5, now);
-
-    master.gain.setValueAtTime(0.0001, now);
-    master.gain.linearRampToValueAtTime(0.065, now + 1.1);
-    master.gain.setValueAtTime(0.055, now + 3.2);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 6.5);
-
-    filter.connect(master);
-    master.connect(this.effectsBus);
-
-    const oscillators: OscillatorNode[] = [];
-    intervals.forEach((ratio, index) => {
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const voiceGain = this.ctx.createGain();
-
-      osc.type = index % 2 === 0 ? 'sine' : 'triangle';
-      const registerMult = safeCharacter === 7 ? 1.5 : safeCharacter === 2 ? 0.75 : 1.0;
-      osc.frequency.setValueAtTime(root * ratio * registerMult, now);
-      osc.detune.setValueAtTime(index % 2 === 0 ? -3 : 3, now);
-
-      voiceGain.gain.setValueAtTime(0.16, now);
-
-      osc.connect(voiceGain);
-      voiceGain.connect(filter);
-
-      osc.start(now);
-      osc.stop(now + 6.6);
-      oscillators.push(osc);
-    });
-
-    if (oscillators.length > 0) {
-      oscillators[oscillators.length - 1].onended = () => {
-        oscillators.forEach((osc) => osc.disconnect());
-        filter.disconnect();
-        master.disconnect();
-      };
-    }
-  }
-
   // --- Voice 1: Blissful Celestial Crystal Chime ---
   public triggerChime(freq: number, velocity: number = 1.0) {
     if (!this.ctx || !this.effectsBus) return;
     const now = this.ctx.currentTime;
     const vel = Math.max(0.1, Math.min(1.5, velocity));
 
+    // Pure fundamental + micro-chorus detune + crystalline overtone + starry shimmer
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     const osc3 = this.ctx.createOscillator();
@@ -303,15 +235,19 @@ export class AudioEngine {
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(freq, now);
 
+    // Lush detuned micro-chorus (+4.5 cents for mystical blissful shimmer)
     osc2.type = 'triangle';
     osc2.frequency.setValueAtTime(freq * 1.0026, now);
 
+    // Crystalline bell harmonic (2.76x)
     osc3.type = 'sine';
     osc3.frequency.setValueAtTime(freq * 2.76, now);
 
+    // High celestial glass sparkle (4.0x)
     osc4.type = 'sine';
     osc4.frequency.setValueAtTime(freq * 4.0, now);
 
+    // Blissful soft velvet attack (0.012s) and long resonant decay (up to 2.6s)
     gain1.gain.setValueAtTime(0.001, now);
     gain1.gain.linearRampToValueAtTime(0.26 * vel, now + 0.012);
     gain1.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
@@ -347,9 +283,11 @@ export class AudioEngine {
     osc2.stop(now + 2.2);
     osc3.stop(now + 1.6);
     osc4.stop(now + 1.0);
+    // Note: Chimes do NOT trigger sub-bass to ensure absolute drone silence when pad is disabled
   }
 
-  // --- Voice: Soft nature pads ---
+  // --- Voice: Soft wildlife / pond nature pads (independent of the sustained sub-bass pad) ---
+  // Character 0-4 changes the harmonic colour while keeping the sound soft and melodic.
   public triggerNaturePad(freq: number, character: number = 0) {
     if (!this.ctx || !this.effectsBus) return;
     const now = this.ctx.currentTime;
@@ -383,6 +321,75 @@ export class AudioEngine {
     oscA.start(now); oscB.start(now); oscC.start(now);
     oscA.stop(now + 5.0); oscB.stop(now + 5.0); oscC.stop(now + 4.5);
     oscA.onended = () => { oscA.disconnect(); oscB.disconnect(); oscC.disconnect(); filter.disconnect(); amp.disconnect(); shimmer.disconnect(); };
+  }
+
+  // --- Wildlife: soft sustained ambient chord voice ---
+  // Kept separate from the continuous sub-bass and existing nature-pad voices.
+  public triggerAnimalChord(rootFreq: number, character: number = 0) {
+    if (!this.ctx || !this.effectsBus || this.isMuted) return;
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const root = Math.max(110, Math.min(700, Number.isFinite(rootFreq) ? rootFreq : 220));
+
+    // Semitone voicings: maj7, add9, min7, sus/add9, min9,
+    // airy maj7, suspended 4/add9, and gentle maj9.
+    const voicings: number[][] = [
+      [0, 4, 7, 11, 14],
+      [0, 4, 7, 14, 16],
+      [0, 3, 7, 10, 14],
+      [0, 2, 7, 14, 17],
+      [0, 3, 7, 10, 14],
+      [0, 4, 7, 11, 19],
+      [0, 5, 7, 14, 17],
+      [0, 4, 7, 11, 14],
+    ];
+    const index = Math.max(0, Math.min(voicings.length - 1, Math.floor(character)));
+    const notes = voicings[index];
+
+    const filter = ctx.createBiquadFilter();
+    const master = ctx.createGain();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(index === 5 ? 2100 : 1550, now);
+    filter.Q.setValueAtTime(0.55, now);
+
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.linearRampToValueAtTime(0.052, now + 0.9);
+    master.gain.setValueAtTime(0.046, now + 3.8);
+    master.gain.setTargetAtTime(0.0001, now + 4.8, 0.55);
+
+    filter.connect(master);
+    master.connect(this.effectsBus);
+
+    let ended = 0;
+    notes.forEach((semitone, voiceIndex) => {
+      const osc = ctx.createOscillator();
+      const voiceGain = ctx.createGain();
+      const frequency = root * Math.pow(2, semitone / 12);
+
+      osc.type = voiceIndex === 0 || voiceIndex === 2 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(frequency, now);
+      osc.detune.setValueAtTime(voiceIndex % 2 === 0 ? -2.5 : 2.5, now);
+
+      voiceGain.gain.setValueAtTime(0.0001, now);
+      voiceGain.gain.linearRampToValueAtTime(0.13, now + 0.75 + voiceIndex * 0.035);
+      voiceGain.gain.setValueAtTime(0.13, now + 4.5);
+      voiceGain.gain.setTargetAtTime(0.0001, now + 4.8, 0.5);
+
+      osc.connect(voiceGain);
+      voiceGain.connect(filter);
+      osc.onended = () => {
+        osc.disconnect();
+        voiceGain.disconnect();
+        ended += 1;
+        if (ended === notes.length) {
+          filter.disconnect();
+          master.disconnect();
+        }
+      };
+      osc.start(now);
+      osc.stop(now + 6.8);
+    });
   }
 
   // --- Voice 2: Wood Tongue Drum ---
@@ -490,13 +497,14 @@ export class AudioEngine {
     whiteNoise.stop(now + 0.4);
   }
 
-  // --- Voice 5: Bioluminescent Mushroom Voices ---
+  // --- Voice 5: Bioluminescent Mushroom Voices (4 Distinct Sound Varieties) ---
   public triggerMushroomSound(freq: number, subtype: number = 0) {
     if (!this.ctx || !this.effectsBus) return;
     const now = this.ctx.currentTime;
     const mode = subtype % 4;
 
     if (mode === 0) {
+      // 1. Organic Bio-Bubble Liquid Pop
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
@@ -519,6 +527,7 @@ export class AudioEngine {
       osc.start(now);
       osc.stop(now + 0.6);
     } else if (mode === 1) {
+      // 2. Lucid FM Spore Chime
       const carrier = this.ctx.createOscillator();
       const modulator = this.ctx.createOscillator();
       const modGain = this.ctx.createGain();
@@ -547,6 +556,7 @@ export class AudioEngine {
       carrier.stop(now + 1.9);
       modulator.stop(now + 1.9);
     } else if (mode === 2) {
+      // 3. Deep Fungal Sub-Thump
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
@@ -562,6 +572,7 @@ export class AudioEngine {
       osc.start(now);
       osc.stop(now + 0.95);
     } else {
+      // 4. Shimmering Crystal Spore Bell
       const osc1 = this.ctx.createOscillator();
       const osc2 = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -586,15 +597,17 @@ export class AudioEngine {
     }
   }
 
+  // Alias for backward compatibility
   public triggerMushroomChime(freq: number) {
     this.triggerMushroomSound(freq, Math.floor(Math.random() * 4));
   }
 
-  // --- Voice 6: Tactile Tree Tapping ---
+  // --- Voice 6: Tactile Tree Tapping (Hollow Wood Knock + Crystal Pine Ring) ---
   public triggerTreeTap(freq: number) {
     if (!this.ctx || !this.effectsBus) return;
     const now = this.ctx.currentTime;
 
+    // 1. Hollow organic wood tap transient
     const woodOsc = this.ctx.createOscillator();
     const woodGain = this.ctx.createGain();
     woodOsc.type = 'triangle';
@@ -610,6 +623,7 @@ export class AudioEngine {
     woodOsc.start(now);
     woodOsc.stop(now + 0.38);
 
+    // 2. Crystal bell chime shimmer tail
     this.triggerChime(freq);
   }
 
@@ -631,12 +645,14 @@ export class AudioEngine {
     gain.connect(this.effectsBus);
     osc.start(now);
     osc.stop(now + 0.38);
+    // Note: No sub-bass saw added here to preserve complete drone silence when pad is disabled
   }
 
-  // --- Voice 6: Reese Sub-Bass & Drone Pad ---
+  // --- Voice 6: Reese Sub-Bass & Drone Pad (STRICTLY SILENT WHEN NOT ACTIVATED) ---
   public triggerSubBass(freq: number, isPadVoice = true) {
     if (!this.ctx || !this.padMasterGain) return;
 
+    // Strict requirement: When pad is not activated, it MUST be completely silent
     if (!this.settings.isPadEnabled) {
       this.stopSubBass();
       return;
@@ -644,9 +660,11 @@ export class AudioEngine {
 
     const now = this.ctx.currentTime;
     const safeFreq = Math.max(30, Math.min(220, freq));
+    // Calculate targeted pad gain combining padVolume and reeseSubDrive
     const targetGain = (this.settings.padVolume / 100) * (this.settings.reeseSubDrive / 100) * 0.35;
 
     if (!this.isSubBassRunning || !this.subBassOsc1 || !this.subBassOsc2) {
+      // Clean up any dangling nodes
       this.stopSubBass();
 
       this.subBassOsc1 = this.ctx.createOscillator();
@@ -679,6 +697,7 @@ export class AudioEngine {
       this.subBassOsc2.start(now);
       this.isSubBassRunning = true;
     } else {
+      // Smooth frequency glide while drone continues
       const glideDuration = this.settings.subGlide / 1000;
       this.subBassOsc1.frequency.cancelScheduledValues(now);
       this.subBassOsc2.frequency.cancelScheduledValues(now);
@@ -690,6 +709,9 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Completely and immediately silences the sustained pad / Reese drone
+   */
   public stopSubBass() {
     if (this.padMasterGain && this.ctx) {
       try {
@@ -754,7 +776,7 @@ export class AudioEngine {
     }
   }
 
-  // --- Voice 7: Ambient Wind ---
+  // --- Voice 7: Ambient Wind (Strictly 0 Gain When Disabled to Eliminate White Noise Hiss) ---
   public startAmbientWind() {
     if (!this.ctx || this.isWindRunning || !this.effectsBus) return;
     try {
@@ -798,6 +820,7 @@ export class AudioEngine {
     if (!this.ctx || !this.effectsBus) return;
     const now = this.ctx.currentTime;
 
+    // Pitch down into low rich sub/bass register (45Hz - 120Hz)
     let bassFreq = freq;
     while (bassFreq > 130) {
       bassFreq *= 0.5;
@@ -836,23 +859,41 @@ export class AudioEngine {
   }
 
   // --- 16-STEP MELODY & 4-NOTE MODAL BASSLINE GENERATOR ---
+  /**
+   * Generates a structured 16-step 4/4 melody motif and a 4-note modal bassline.
+   * Steps 0, 4, 8, 12 correspond to Beats 1, 2, 3, 4 where the 4 bass notes play.
+   */
   public generateNew44Pattern(activeBiome?: ForestThemeKey) {
     const mode = MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
     const maxDegree = Math.min(mode.notes.length - 1, 7);
 
+    // 1. Generate 4-note bassline from musical mode degrees:
+    // Beat 1: Root anchor (degree 0)
+    // Beat 2: Subdominant or modal characteristic degree (degree 2, 3, or 4)
+    // Beat 3: Dominant fifth or sixth (degree 4 or 5)
+    // Beat 4: Leading/cadential resolution (degree 6, 1, or 2)
     const beat1 = 0;
     const beat2 = Math.random() > 0.5 ? 2 : Math.min(3, maxDegree);
     const beat3 = Math.min(4, maxDegree);
     const beat4 = Math.random() > 0.5 ? 1 : Math.min(6, maxDegree);
     this.bassPattern = [beat1, beat2, beat3, beat4];
 
+    // 2. Generate 16 16th-note melody steps in 4/4 time
     const pattern: (number | null)[] = new Array(16).fill(null);
 
+    // Beat 1 downbeat (step 0): Root or octave
     pattern[0] = Math.random() > 0.3 ? 0 : 7;
+
+    // Beat 2 downbeat (step 4): Mode color note
     pattern[4] = Math.random() > 0.4 ? 2 : 4;
+
+    // Beat 3 downbeat (step 8): Fifth or octave
     pattern[8] = Math.random() > 0.35 ? 4 : 7;
+
+    // Beat 4 downbeat (step 12): Resolution degree
     pattern[12] = Math.random() > 0.4 ? 6 : 1;
 
+    // Syncopated passing steps
     const syncopatedSteps = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15];
     const fillProb = activeBiome === 'cyberpunk' ? 0.65 : activeBiome === 'glacial' ? 0.32 : 0.45;
     for (const step of syncopatedSteps) {
@@ -890,6 +931,8 @@ export class AudioEngine {
 
     if (shouldEnable) {
       if (this.melodyTimerId) window.clearInterval(this.melodyTimerId);
+      // In 4/4 time: 1 beat = (60 / bpm) seconds.
+      // 16th note step = (60 / bpm) / 4 * 1000 ms.
       const stepMs = ((60 / this.settings.melodyBpm) / 4) * 1000;
       this.currentMelodyStep = 0;
       this.melodyTimerId = window.setInterval(() => {
@@ -907,10 +950,11 @@ export class AudioEngine {
     if (!this.ctx || !this.settings.isMelodyPlaying) return;
     const mode: MusicalMode = MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
     const step = this.currentMelodyStep;
-    const beat = Math.floor(step / 4) + 1;
+    const beat = Math.floor(step / 4) + 1; // 1, 2, 3, or 4
     const isDownbeat = step % 4 === 0;
-    const beatIndex = Math.floor(step / 4);
+    const beatIndex = Math.floor(step / 4); // 0, 1, 2, 3
 
+    // 1. Play 4-Beat Modal Bassline on downbeats (Steps 0, 4, 8, 12)
     let currentBassNoteName = '—';
     let currentBassFreq = 0;
     if (isDownbeat && this.bassPattern[beatIndex] !== undefined) {
@@ -921,6 +965,7 @@ export class AudioEngine {
       this.triggerBassVoice(currentBassFreq);
     }
 
+    // 2. Play 16-Step Melody Note
     const noteIdx = this.melodyPattern[step];
     if (noteIdx !== null && noteIdx !== undefined) {
       const safeIdx = Math.min(mode.notes.length - 1, noteIdx);
@@ -942,6 +987,9 @@ export class AudioEngine {
     this.currentMelodyStep = (this.currentMelodyStep + 1) % 16;
   }
 
+  /**
+   * Randomizes music melody and 4-note bassline according to the chosen biome
+   */
   public randomizeBiomeMelody(themeKey: ForestThemeKey) {
     this.applyBiomeDsp(themeKey);
 
@@ -979,6 +1027,7 @@ export class AudioEngine {
     this.settings.melodyBpm = targetBpm;
     this.generateNew44Pattern(themeKey);
 
+    // Auto-restart sequencer with new tempo and notes
     if (!this.settings.isMelodyPlaying) {
       this.toggle44Melody(true);
     } else {
@@ -986,6 +1035,11 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * MASTER STOP: When master stop is applied, ALL sound must stop immediately!
+   * Stops melody sequencer, kills continuous pad/sub-bass drone, silences wind noise,
+   * dampens delay feedback, and flushes reverb wetness so there is zero residual noise or hiss.
+   */
   public masterStop() {
     this.toggle44Melody(false);
     this.stopSubBass();
@@ -994,10 +1048,12 @@ export class AudioEngine {
 
     if (this.ctx) {
       const now = this.ctx.currentTime;
+      // Silence ambient wind completely
       if (this.windGain) {
         this.windGain.gain.cancelScheduledValues(now);
         this.windGain.gain.setValueAtTime(0, now);
       }
+      // Instantly kill delay feedback to flush echoes
       if (this.delayFeedbackGainL && this.delayFeedbackGainR) {
         this.delayFeedbackGainL.gain.cancelScheduledValues(now);
         this.delayFeedbackGainR.gain.cancelScheduledValues(now);
@@ -1012,6 +1068,7 @@ export class AudioEngine {
           }
         }, 150);
       }
+      // Momentarily flush effects bus to kill reverb ring
       if (this.effectsBus) {
         this.effectsBus.gain.cancelScheduledValues(now);
         this.effectsBus.gain.setValueAtTime(0, now);
@@ -1020,6 +1077,7 @@ export class AudioEngine {
     }
   }
 
+  // --- Real-time Visualizer Data Helpers ---
   public getFrequencyData(array: Uint8Array): void {
     if (this.analyser) {
       this.analyser.getByteFrequencyData(array as unknown as Uint8Array<ArrayBuffer>);
@@ -1043,6 +1101,7 @@ export class AudioEngine {
     return sum / (buffer.length * 255);
   }
 
+  // --- Settings Controller ---
   public updateSettings(newSettings: Partial<SynthSettings>) {
     this.settings = { ...this.settings, ...newSettings };
     if (!this.ctx) return;
@@ -1094,6 +1153,9 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Smoothly transitions the DSP audio nodes to the biome's specific acoustic sonic signature
+   */
   public applyBiomeDsp(themeKey: ForestThemeKey) {
     const theme = FOREST_THEMES[themeKey];
     if (theme && theme.dsp) {
