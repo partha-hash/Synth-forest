@@ -57,7 +57,8 @@ export class AudioEngine {
   private melodyTimerId: number | null = null;
   public currentMelodyStep: number = 0; // 0 to 31
   private melodyPattern: (number | null)[] = []; // 32 steps of mode notes
-  private bassPattern: number[] = [0, 2, 4, 1, 0, 5, 3, 0]; // 8 notes for Beats 1 through 8 (scale degrees)
+  private bassPattern: (number | null)[] = [0, null, 4, null]; // Four sustained notes/rests across a 4-bar phrase
+  private bassBarIndex: number = 0;
 
   // Callbacks
   public onNoteTriggered?: (type: string, noteName: string, freq: number) => void;
@@ -815,47 +816,49 @@ export class AudioEngine {
     }
   }
 
-  // --- Voice 8: 4-Beat Modal Bassline Synthesizer Voice ---
-  public triggerBassVoice(freq: number) {
-    if (!this.ctx || !this.effectsBus) return;
+  // --- Atmospheric sustained modal bass voice ---
+  // durationSeconds is normally one full bar, so the bass supports the harmony
+  // instead of retriggering on every beat.
+  public triggerBassVoice(freq: number, durationSeconds: number = 1.8) {
+    if (!this.ctx || !this.effectsBus || !Number.isFinite(freq) || freq <= 0) return;
     const now = this.ctx.currentTime;
+    const duration = Math.max(0.5, Math.min(8, durationSeconds));
 
-    // Pitch down into low rich sub/bass register (45Hz - 120Hz)
     let bassFreq = freq;
-    while (bassFreq > 130) {
-      bassFreq *= 0.5;
-    }
-    if (bassFreq < 42) bassFreq *= 2;
+    while (bassFreq > 110) bassFreq *= 0.5;
+    while (bassFreq < 38) bassFreq *= 2;
 
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
+    // Rounded, warm sub with a quiet upper harmonic for translation on small speakers.
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(bassFreq, now);
-
     osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(bassFreq * 1.003, now);
-
+    osc2.frequency.setValueAtTime(bassFreq * 1.002, now);
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(bassFreq * 3.6, now);
-    filter.frequency.exponentialRampToValueAtTime(Math.max(50, bassFreq * 1.1), now + 0.32);
-    filter.Q.setValueAtTime(3.2, now);
+    filter.frequency.setValueAtTime(Math.min(260, bassFreq * 2.8), now);
+    filter.Q.setValueAtTime(0.65, now);
 
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.42, now + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52);
+    const peak = 0.19;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(peak, now + 0.12);
+    gain.gain.setValueAtTime(peak * 0.82, now + Math.max(0.14, duration - 0.18));
+    gain.gain.linearRampToValueAtTime(0.0001, now + duration);
 
     osc1.connect(filter);
     osc2.connect(filter);
     filter.connect(gain);
     gain.connect(this.effectsBus);
-
     osc1.start(now);
     osc2.start(now);
-    osc1.stop(now + 0.55);
-    osc2.stop(now + 0.55);
+    osc1.stop(now + duration + 0.03);
+    osc2.stop(now + duration + 0.03);
+    osc1.onended = () => { try { osc1.disconnect(); } catch {} };
+    osc2.onended = () => { try { osc2.disconnect(); } catch {} };
+    setTimeout(() => { try { filter.disconnect(); gain.disconnect(); } catch {} }, (duration + 0.1) * 1000);
   }
 
   // --- 16-STEP MELODY & 4-NOTE MODAL BASSLINE GENERATOR ---
@@ -867,16 +870,12 @@ export class AudioEngine {
     const mode = MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
     const maxDegree = Math.min(mode.notes.length - 1, 7);
 
-    // 1. Generate 4-note bassline from musical mode degrees:
-    // Beat 1: Root anchor (degree 0)
-    // Beat 2: Subdominant or modal characteristic degree (degree 2, 3, or 4)
-    // Beat 3: Dominant fifth or sixth (degree 4 or 5)
-    // Beat 4: Leading/cadential resolution (degree 6, 1, or 2)
-    const beat1 = 0;
-    const beat2 = Math.random() > 0.5 ? 2 : Math.min(3, maxDegree);
-    const beat3 = Math.min(4, maxDegree);
-    const beat4 = Math.random() > 0.5 ? 1 : Math.min(6, maxDegree);
-    this.bassPattern = [beat1, beat2, beat3, beat4];
+    // Four-bar atmospheric bass phrase: only 2-3 sustained notes per cycle.
+    // Empty bars are intentional rests that leave room for the pads and ambience.
+    const colorDegree = Math.random() > 0.5 ? 2 : Math.min(3, maxDegree);
+    const fifthDegree = Math.min(4, maxDegree);
+    this.bassPattern = [0, Math.random() > 0.55 ? colorDegree : null, fifthDegree, Math.random() > 0.5 ? 1 : null];
+    this.bassBarIndex = 0;
 
     // 2. Generate 16 16th-note melody steps in 4/4 time
     const pattern: (number | null)[] = new Array(16).fill(null);
@@ -915,13 +914,13 @@ export class AudioEngine {
     }
   }
 
-  public getBassPattern(): number[] {
+  public getBassPattern(): (number | null)[] {
     return [...this.bassPattern];
   }
 
-  public setBassNote(beatIdx: number, degree: number) {
-    if (beatIdx >= 0 && beatIdx < 4) {
-      this.bassPattern[beatIdx] = Math.max(0, degree);
+  public setBassNote(barIdx: number, degree: number | null) {
+    if (barIdx >= 0 && barIdx < 4) {
+      this.bassPattern[barIdx] = degree === null ? null : Math.max(0, degree);
     }
   }
 
@@ -935,6 +934,7 @@ export class AudioEngine {
       // 16th note step = (60 / bpm) / 4 * 1000 ms.
       const stepMs = ((60 / this.settings.melodyBpm) / 4) * 1000;
       this.currentMelodyStep = 0;
+      this.bassBarIndex = 0;
       this.melodyTimerId = window.setInterval(() => {
         this.step44Melody();
       }, stepMs);
@@ -954,15 +954,20 @@ export class AudioEngine {
     const isDownbeat = step % 4 === 0;
     const beatIndex = Math.floor(step / 4); // 0, 1, 2, 3
 
-    // 1. Play 4-Beat Modal Bassline on downbeats (Steps 0, 4, 8, 12)
+    // Bass changes only at the start of each bar and cycles over four bars.
+    // Each note sustains for almost the full bar; null entries are deliberate rests.
     let currentBassNoteName = '—';
     let currentBassFreq = 0;
-    if (isDownbeat && this.bassPattern[beatIndex] !== undefined) {
-      const bassDegree = this.bassPattern[beatIndex];
-      const safeBassIdx = Math.min(mode.notes.length - 1, bassDegree);
-      currentBassFreq = mode.notes[safeBassIdx] * 0.5;
-      currentBassNoteName = mode.noteNames[safeBassIdx] || 'C2';
-      this.triggerBassVoice(currentBassFreq);
+    if (step === 0) {
+      const bassDegree = this.bassPattern[this.bassBarIndex];
+      if (bassDegree !== null && bassDegree !== undefined) {
+        const safeBassIdx = Math.min(mode.notes.length - 1, bassDegree);
+        currentBassFreq = mode.notes[safeBassIdx] * 0.5;
+        currentBassNoteName = mode.noteNames[safeBassIdx] || 'C2';
+        const barDuration = (60 / this.settings.melodyBpm) * 4 * 0.94;
+        this.triggerBassVoice(currentBassFreq, barDuration);
+      }
+      this.bassBarIndex = (this.bassBarIndex + 1) % 4;
     }
 
     // 2. Play 16-Step Melody Note
