@@ -93,7 +93,7 @@ export const TransparentJoystick: React.FC<TransparentJoystickProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
-        className="fixed inset-y-0 left-0 w-[55vw] z-20 pointer-events-auto touch-none no-scene-drag"
+        className="fixed inset-y-0 left-0 w-[55vw] z-20 pointer-events-auto [@media(pointer:fine)]:pointer-events-none touch-none no-scene-drag"
         style={{ WebkitTapHighlightColor: 'transparent' }}
       />
 
