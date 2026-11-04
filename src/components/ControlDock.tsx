@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sliders,
   Sparkles,
@@ -65,6 +65,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   const [activeBassNote, setActiveBassNote] = useState<string>('—');
   const [melodyPattern, setMelodyPattern] = useState<(number | null)[]>(audioEngine.getMelodyPattern());
   const [bassPattern, setBassPattern] = useState<number[]>(audioEngine.getBassPattern());
+
+  // Remembers when each sequencer step was last tapped (used for double-tap to clear)
+  const lastStepTapRef = useRef<Record<number, number>>({});
 
   const theme = FOREST_THEMES[currentTheme] || FOREST_THEMES.astral;
   const currentMode: MusicalMode = MUSICAL_MODES[synthSettings.selectedMode] || MUSICAL_MODES.dorian;
@@ -390,7 +393,18 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                                 <button
                                   key={stepIdx}
                                   onClick={() => {
-                                    // Toggle/mutate note on click
+                                    // Double-tap (two taps within 300ms) clears the step
+                                    const now = Date.now();
+                                    const last = lastStepTapRef.current[stepIdx] || 0;
+                                    lastStepTapRef.current[stepIdx] = now;
+                                    if (now - last < 300) {
+                                      lastStepTapRef.current[stepIdx] = 0;
+                                      audioEngine.setMelodyStep(stepIdx, null);
+                                      setMelodyPattern(audioEngine.getMelodyPattern());
+                                      return;
+                                    }
+
+                                    // Single tap: add a note, or cycle to the next note
                                     const nextDegree = hasNote
                                       ? (noteDegree + 2) % currentMode.notes.length
                                       : subStep === 0
@@ -400,14 +414,14 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                                     setMelodyPattern(audioEngine.getMelodyPattern());
                                     audioEngine.triggerChime(currentMode.notes[nextDegree]);
                                   }}
-                                  className={`h-7 rounded-md flex flex-col items-center justify-center font-mono text-[9px] transition-all duration-75 cursor-pointer ${
+                                  className={`touch-manipulation h-7 rounded-md flex flex-col items-center justify-center font-mono text-[9px] transition-all duration-75 cursor-pointer ${
                                     isCurrent
                                       ? 'bg-emerald-300 text-emerald-950 font-bold scale-105 shadow-[0_0_12px_rgba(52,211,153,0.8)]'
                                       : hasNote
                                       ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/30'
                                       : 'bg-emerald-950/40 text-emerald-700/60 hover:text-emerald-500'
                                   }`}
-                                  title={`Step ${stepIdx + 1}: ${noteName}`}
+                                  title={`Step ${stepIdx + 1}: ${noteName} (double-tap to clear)`}
                                 >
                                   <span className="text-[8px] opacity-60 leading-none">{stepIdx + 1}</span>
                                   <span className="font-bold leading-tight">{noteName}</span>
