@@ -46,11 +46,9 @@ export const TransparentJoystick: React.FC<TransparentJoystickProps> = ({
     };
 
     const handleTouchStart = (event: TouchEvent) => {
-      // Leave multi-finger gestures to ForestScene's biome gesture handler.
-      if (event.touches.length >= 2) {
-        if (touchIdRef.current !== null) reset();
-        return;
-      }
+      // Keep the walking finger active when a second finger is used for free look.
+      // Only the first eligible left-side touch drives the joystick.
+      if (event.touches.length >= 2) return;
       if (touchIdRef.current !== null || isControlTarget(event.target)) return;
 
       const touch = event.changedTouches[0];
@@ -65,10 +63,6 @@ export const TransparentJoystick: React.FC<TransparentJoystickProps> = ({
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (event.touches.length >= 2) {
-        if (touchIdRef.current !== null) reset();
-        return;
-      }
       const id = touchIdRef.current;
       const base = basePosRef.current;
       if (id === null || !base) return;
