@@ -57,7 +57,8 @@ export class AudioEngine {
   private melodyTimerId: number | null = null;
   public currentMelodyStep: number = 0; // 0 to 31
   private melodyPattern: (number | null)[] = []; // 32 steps of mode notes
-  private bassPattern: number[] = [0, 2, 4, 1, 0, 5, 3, 0]; // 8 notes for Beats 1 through 8 (scale degrees)
+  // Bass beats (scale degrees). A null entry is a rest (that beat plays no bass note).
+  private bassPattern: (number | null)[] = [0, 2, 4, 1, 0, 5, 3, 0];
 
   // Callbacks
   public onNoteTriggered?: (type: string, noteName: string, freq: number) => void;
@@ -809,13 +810,14 @@ export class AudioEngine {
     }
   }
 
-  public getBassPattern(): number[] {
+  public getBassPattern(): (number | null)[] {
     return [...this.bassPattern];
   }
 
-  public setBassNote(beatIdx: number, degree: number) {
+  // Pass null to clear a bass beat (it becomes a rest)
+  public setBassNote(beatIdx: number, degree: number | null) {
     if (beatIdx >= 0 && beatIdx < 4) {
-      this.bassPattern[beatIdx] = Math.max(0, degree);
+      this.bassPattern[beatIdx] = degree === null ? null : Math.max(0, degree);
     }
   }
 
@@ -849,10 +851,11 @@ export class AudioEngine {
     const beatIndex = Math.floor(step / 4); // 0, 1, 2, 3
 
     // 1. Play 4-Beat Modal Bassline on downbeats (Steps 0, 4, 8, 12)
+    // A null bass beat is a rest and plays nothing.
     let currentBassNoteName = '—';
     let currentBassFreq = 0;
-    if (isDownbeat && this.bassPattern[beatIndex] !== undefined) {
-      const bassDegree = this.bassPattern[beatIndex];
+    const bassDegree = this.bassPattern[beatIndex];
+    if (isDownbeat && bassDegree !== undefined && bassDegree !== null) {
       const safeBassIdx = Math.min(mode.notes.length - 1, bassDegree);
       currentBassFreq = mode.notes[safeBassIdx] * 0.5;
       currentBassNoteName = mode.noteNames[safeBassIdx] || 'C2';
