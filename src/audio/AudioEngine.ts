@@ -57,8 +57,7 @@ export class AudioEngine {
   private melodyTimerId: number | null = null;
   public currentMelodyStep: number = 0; // 0 to 31
   private melodyPattern: (number | null)[] = []; // 32 steps of mode notes
-  // Bass beats (scale degrees). A null entry is a rest (that beat plays no bass note).
-  private bassPattern: (number | null)[] = [0, 2, 4, 1, 0, 5, 3, 0];
+  private bassPattern: number[] = [0, 2, 4, 1, 0, 5, 3, 0]; // 8 notes for Beats 1 through 8 (scale degrees)
 
   // Callbacks
   public onNoteTriggered?: (type: string, noteName: string, freq: number) => void;
@@ -287,6 +286,43 @@ export class AudioEngine {
     // Note: Chimes do NOT trigger sub-bass to ensure absolute drone silence when pad is disabled
   }
 
+  // --- Voice: Soft wildlife / pond nature pads (independent of the sustained sub-bass pad) ---
+  // Character 0-4 changes the harmonic colour while keeping the sound soft and melodic.
+  public triggerNaturePad(freq: number, character: number = 0) {
+    if (!this.ctx || !this.effectsBus) return;
+    const now = this.ctx.currentTime;
+    const safeFreq = Math.max(110, Math.min(1100, freq));
+    const oscA = this.ctx.createOscillator();
+    const oscB = this.ctx.createOscillator();
+    const oscC = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const amp = this.ctx.createGain();
+    const shimmer = this.ctx.createGain();
+    const colour = Math.max(0, Math.min(4, Math.floor(character)));
+    oscA.type = colour === 4 ? 'sine' : 'triangle';
+    oscB.type = 'sine';
+    oscC.type = colour === 3 ? 'sine' : 'triangle';
+    const ratios = [1.005, 1.25, 1.5, 2.0, 2.01];
+    oscA.frequency.setValueAtTime(safeFreq, now);
+    oscB.frequency.setValueAtTime(safeFreq * ratios[colour], now);
+    oscC.frequency.setValueAtTime(safeFreq * (colour === 3 ? 2.98 : 2.0), now);
+    oscB.detune.setValueAtTime(colour === 1 ? -7 : 5, now);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(colour === 4 ? 1800 : 2600, now);
+    filter.Q.setValueAtTime(0.65, now);
+    amp.gain.setValueAtTime(0.0001, now);
+    amp.gain.linearRampToValueAtTime(0.105, now + 0.42);
+    amp.gain.setTargetAtTime(0.0001, now + 1.0, 1.35);
+    shimmer.gain.setValueAtTime(0.0001, now);
+    shimmer.gain.linearRampToValueAtTime(0.035, now + 0.65);
+    shimmer.gain.setTargetAtTime(0.0001, now + 1.2, 1.1);
+    oscA.connect(filter); oscB.connect(filter); oscC.connect(shimmer);
+    filter.connect(amp); amp.connect(this.effectsBus); shimmer.connect(this.effectsBus);
+    oscA.start(now); oscB.start(now); oscC.start(now);
+    oscA.stop(now + 5.0); oscB.stop(now + 5.0); oscC.stop(now + 4.5);
+    oscA.onended = () => { oscA.disconnect(); oscB.disconnect(); oscC.disconnect(); filter.disconnect(); amp.disconnect(); shimmer.disconnect(); };
+  }
+
   // --- Voice 2: Wood Tongue Drum ---
   public triggerWoodDrum(freq: number) {
     if (!this.ctx || !this.effectsBus) return;
@@ -495,192 +531,6 @@ export class AudioEngine {
   // Alias for backward compatibility
   public triggerMushroomChime(freq: number) {
     this.triggerMushroomSound(freq, Math.floor(Math.random() * 4));
-  }
-
-  // --- Forest Floor Voice 1: Sapling Pluck (soft kalimba-like tine) ---
-  public triggerSaplingPluck(freq: number) {
-    if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-
-    const body = this.ctx.createOscillator();
-    const tine = this.ctx.createOscillator();
-    const bodyGain = this.ctx.createGain();
-    const tineGain = this.ctx.createGain();
-
-    body.type = 'sine';
-    body.frequency.setValueAtTime(freq, now);
-
-    // Slightly inharmonic overtone gives the "metal tine" character
-    tine.type = 'sine';
-    tine.frequency.setValueAtTime(freq * 5.4, now);
-
-    bodyGain.gain.setValueAtTime(0.001, now);
-    bodyGain.gain.linearRampToValueAtTime(0.28, now + 0.003);
-    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
-
-    tineGain.gain.setValueAtTime(0.001, now);
-    tineGain.gain.linearRampToValueAtTime(0.07, now + 0.002);
-    tineGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-
-    body.connect(bodyGain);
-    tine.connect(tineGain);
-    bodyGain.connect(this.effectsBus);
-    tineGain.connect(this.effectsBus);
-
-    body.start(now);
-    tine.start(now);
-    body.stop(now + 1.05);
-    tine.stop(now + 0.2);
-  }
-
-  // --- Forest Floor Voice 2: Fern Brush (airy leaf swish with a faint pitch) ---
-  public triggerFernBrush(freq: number) {
-    if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-
-    const bufferSize = Math.floor(this.ctx.sampleRate * 0.6);
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
-    }
-
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = noiseBuffer;
-
-    const band = this.ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    const centre = Math.max(900, Math.min(4200, freq * 2));
-    band.frequency.setValueAtTime(centre, now);
-    band.frequency.exponentialRampToValueAtTime(centre * 0.6, now + 0.5);
-    band.Q.setValueAtTime(1.2, now);
-
-    const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.001, now);
-    noiseGain.gain.linearRampToValueAtTime(0.16, now + 0.07);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-
-    // Very quiet sine so each fern has its own note
-    const tone = this.ctx.createOscillator();
-    const toneGain = this.ctx.createGain();
-    tone.type = 'sine';
-    tone.frequency.setValueAtTime(freq, now);
-    toneGain.gain.setValueAtTime(0.001, now);
-    toneGain.gain.linearRampToValueAtTime(0.05, now + 0.08);
-    toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
-
-    noise.connect(band);
-    band.connect(noiseGain);
-    noiseGain.connect(this.effectsBus);
-    tone.connect(toneGain);
-    toneGain.connect(this.effectsBus);
-
-    noise.start(now);
-    noise.stop(now + 0.6);
-    tone.start(now);
-    tone.stop(now + 0.65);
-  }
-
-  // --- Forest Floor Voice 3: Glass Bloom Bell (tiny music-box flower) ---
-  public triggerFlowerBell(freq: number) {
-    if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-
-    const main = this.ctx.createOscillator();
-    const glass = this.ctx.createOscillator();
-    const mainGain = this.ctx.createGain();
-    const glassGain = this.ctx.createGain();
-
-    main.type = 'sine';
-    main.frequency.setValueAtTime(freq, now);
-
-    glass.type = 'sine';
-    glass.frequency.setValueAtTime(freq * 2.51, now);
-
-    mainGain.gain.setValueAtTime(0.001, now);
-    mainGain.gain.linearRampToValueAtTime(0.18, now + 0.002);
-    mainGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.3);
-
-    glassGain.gain.setValueAtTime(0.001, now);
-    glassGain.gain.linearRampToValueAtTime(0.07, now + 0.002);
-    glassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
-
-    main.connect(mainGain);
-    glass.connect(glassGain);
-    mainGain.connect(this.effectsBus);
-    glassGain.connect(this.effectsBus);
-
-    main.start(now);
-    glass.start(now);
-    main.stop(now + 1.35);
-    glass.stop(now + 0.65);
-  }
-
-  // --- Forest Floor Voice 4: Twig Snap (dry crack with a short wooden knock) ---
-  public triggerTwigSnap(freq: number) {
-    if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-
-    const bufferSize = Math.floor(this.ctx.sampleRate * 0.08);
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
-    }
-
-    const crack = this.ctx.createBufferSource();
-    crack.buffer = noiseBuffer;
-
-    const highpass = this.ctx.createBiquadFilter();
-    highpass.type = 'highpass';
-    highpass.frequency.setValueAtTime(2500, now);
-
-    const crackGain = this.ctx.createGain();
-    crackGain.gain.setValueAtTime(0.3, now);
-    crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
-
-    const knock = this.ctx.createOscillator();
-    const knockGain = this.ctx.createGain();
-    knock.type = 'triangle';
-    knock.frequency.setValueAtTime(freq * 1.2, now);
-    knock.frequency.exponentialRampToValueAtTime(freq * 0.6, now + 0.08);
-    knockGain.gain.setValueAtTime(0.001, now);
-    knockGain.gain.linearRampToValueAtTime(0.22, now + 0.002);
-    knockGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-
-    crack.connect(highpass);
-    highpass.connect(crackGain);
-    crackGain.connect(this.effectsBus);
-    knock.connect(knockGain);
-    knockGain.connect(this.effectsBus);
-
-    crack.start(now);
-    crack.stop(now + 0.08);
-    knock.start(now);
-    knock.stop(now + 0.2);
-  }
-
-  // --- Forest Floor Voice 5: Moss Drip (rising water-drop "bloop") ---
-  public triggerMossDrip(freq: number) {
-    if (!this.ctx || !this.effectsBus) return;
-    const now = this.ctx.currentTime;
-
-    const drop = this.ctx.createOscillator();
-    const dropGain = this.ctx.createGain();
-
-    drop.type = 'sine';
-    drop.frequency.setValueAtTime(freq * 0.8, now);
-    drop.frequency.exponentialRampToValueAtTime(freq * 1.8, now + 0.07);
-
-    dropGain.gain.setValueAtTime(0.001, now);
-    dropGain.gain.linearRampToValueAtTime(0.3, now + 0.004);
-    dropGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-
-    drop.connect(dropGain);
-    dropGain.connect(this.effectsBus);
-
-    drop.start(now);
-    drop.stop(now + 0.45);
   }
 
   // --- Voice 6: Tactile Tree Tapping (Hollow Wood Knock + Crystal Pine Ring) ---
@@ -996,14 +846,13 @@ export class AudioEngine {
     }
   }
 
-  public getBassPattern(): (number | null)[] {
+  public getBassPattern(): number[] {
     return [...this.bassPattern];
   }
 
-  // Pass null to clear a bass beat (it becomes a rest)
-  public setBassNote(beatIdx: number, degree: number | null) {
+  public setBassNote(beatIdx: number, degree: number) {
     if (beatIdx >= 0 && beatIdx < 4) {
-      this.bassPattern[beatIdx] = degree === null ? null : Math.max(0, degree);
+      this.bassPattern[beatIdx] = Math.max(0, degree);
     }
   }
 
@@ -1037,11 +886,10 @@ export class AudioEngine {
     const beatIndex = Math.floor(step / 4); // 0, 1, 2, 3
 
     // 1. Play 4-Beat Modal Bassline on downbeats (Steps 0, 4, 8, 12)
-    // A null bass beat is a rest and plays nothing.
     let currentBassNoteName = '—';
     let currentBassFreq = 0;
-    const bassDegree = this.bassPattern[beatIndex];
-    if (isDownbeat && bassDegree !== undefined && bassDegree !== null) {
+    if (isDownbeat && this.bassPattern[beatIndex] !== undefined) {
+      const bassDegree = this.bassPattern[beatIndex];
       const safeBassIdx = Math.min(mode.notes.length - 1, bassDegree);
       currentBassFreq = mode.notes[safeBassIdx] * 0.5;
       currentBassNoteName = mode.noteNames[safeBassIdx] || 'C2';
