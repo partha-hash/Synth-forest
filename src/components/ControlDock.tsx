@@ -64,10 +64,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   const [lastStepNote, setLastStepNote] = useState<string>('—');
   const [activeBassNote, setActiveBassNote] = useState<string>('—');
   const [melodyPattern, setMelodyPattern] = useState<(number | null)[]>(audioEngine.getMelodyPattern());
-  const [bassPattern, setBassPattern] = useState<number[]>(audioEngine.getBassPattern());
+  const [bassPattern, setBassPattern] = useState<(number | null)[]>(audioEngine.getBassPattern());
 
   // Remembers when each sequencer step was last tapped (used for double-tap to clear)
   const lastStepTapRef = useRef<Record<number, number>>({});
+  // Same idea for the bassline (double-tap a bass beat to clear it)
+  const lastBassTapRef = useRef<Record<number, number>>({});
 
   const theme = FOREST_THEMES[currentTheme] || FOREST_THEMES.astral;
   const currentMode: MusicalMode = MUSICAL_MODES[synthSettings.selectedMode] || MUSICAL_MODES.dorian;
@@ -455,30 +457,43 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   <div className="grid grid-cols-4 gap-2">
                     {bassPattern.map((degree, bIdx) => {
                       const isCurrentBeat = activeBeat === bIdx + 1 && synthSettings.isMelodyPlaying;
-                      const safeDeg = Math.min(currentMode.notes.length - 1, degree);
-                      const noteName = currentMode.noteNames[safeDeg] || 'C2';
-                      const freq = Math.round(currentMode.notes[safeDeg] * 0.5);
+                      const safeDeg = degree === null ? 0 : Math.min(currentMode.notes.length - 1, degree);
+                      const noteName = degree === null ? '—' : currentMode.noteNames[safeDeg] || 'C2';
+                      const freq = degree === null ? 0 : Math.round(currentMode.notes[safeDeg] * 0.5);
                       const degreeRoman = ['Root (I)', 'Degree (II/III)', 'Fifth (V)', 'Cadence (VII/II)'][bIdx];
 
                       return (
                         <button
                           key={bIdx}
                           onClick={() => {
-                            const nextDeg = (degree + 1) % Math.min(currentMode.notes.length, 7);
+                            // Double-tap (two taps within 300ms) clears this bass beat
+                            const now = Date.now();
+                            const last = lastBassTapRef.current[bIdx] || 0;
+                            lastBassTapRef.current[bIdx] = now;
+                            if (now - last < 300) {
+                              lastBassTapRef.current[bIdx] = 0;
+                              audioEngine.setBassNote(bIdx, null);
+                              setBassPattern(audioEngine.getBassPattern());
+                              return;
+                            }
+
+                            // Single tap: add the root note, or cycle to the next degree
+                            const nextDeg =
+                              degree === null ? 0 : (degree + 1) % Math.min(currentMode.notes.length, 7);
                             audioEngine.setBassNote(bIdx, nextDeg);
                             setBassPattern(audioEngine.getBassPattern());
                             audioEngine.triggerBassVoice(currentMode.notes[nextDeg] * 0.5);
                           }}
-                          className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          className={`touch-manipulation p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
                             isCurrentBeat
                               ? 'bg-emerald-400 text-emerald-950 font-bold border-emerald-300 shadow-[0_0_16px_rgba(52,211,153,0.6)] scale-[1.02]'
                               : 'bg-[#020e09]/80 border-emerald-500/20 text-emerald-200 hover:border-emerald-400/40'
                           }`}
-                          title={`Click to cycle bass degree for Beat ${bIdx + 1}`}
+                          title={`Beat ${bIdx + 1}: click to cycle bass degree, double-tap to clear`}
                         >
                           <div className="text-[9px] font-mono opacity-60">BEAT {bIdx + 1}</div>
                           <div className="text-sm font-mono font-bold tracking-tight">{noteName}</div>
-                          <div className="text-[9px] font-mono opacity-70">{freq} Hz</div>
+                          <div className="text-[9px] font-mono opacity-70">{degree === null ? 'rest' : `${freq} Hz`}</div>
                           <div className="text-[8px] font-mono opacity-50 mt-0.5">{degreeRoman}</div>
                         </button>
                       );
