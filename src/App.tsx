@@ -1,7 +1,3 @@
-/**
- * redowan's synth forest - Interactive 3D Audio-Visual Nature Experience
- */
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ForestScene } from './components/ForestScene';
 import { ControlDock } from './components/ControlDock';
@@ -30,24 +26,20 @@ export default function App() {
   const [showBiomeToast, setShowBiomeToast] = useState<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
 
-  // Initialize Web Audio on user entrance
   const handleEnter = async () => {
     const success = await audioEngine.initAudio();
     if (success) {
       setHasEntered(true);
-      // Apply initial biome DSP settings
       audioEngine.applyBiomeDsp(currentTheme);
 
-      // Welcome opening chord
       setTimeout(() => {
         audioEngine.triggerChime(220);
         setTimeout(() => audioEngine.triggerChime(329.63), 160);
-        setTimeout(() => audioEngine.triggerMushroomChime(440), 320);
+        setTimeout(() => audioEngine.triggerMushroomSound(440, 0), 320);
       }, 200);
     }
   };
 
-  // Update audio engine when settings change
   const handleSettingsChange = useCallback((newSettings: Partial<SynthSettings>) => {
     setSynthSettings((prev) => {
       const updated = { ...prev, ...newSettings };
@@ -56,7 +48,6 @@ export default function App() {
     });
   }, []);
 
-  // Mute toggle
   const handleToggleMute = useCallback(() => {
     setIsMuted((prev) => {
       const next = !prev;
@@ -65,7 +56,6 @@ export default function App() {
     });
   }, []);
 
-  // MASTER STOP: When master stop is applied, ALL sound must stop immediately
   const handleMasterStop = useCallback(() => {
     audioEngine.masterStop();
     setIsAutoExploring(false);
@@ -76,12 +66,10 @@ export default function App() {
     }));
   }, []);
 
-  // Toggle Auto Explore (Autonomous camera flight + biome-randomized melody)
   const handleToggleAutoExplore = useCallback(() => {
     setIsAutoExploring((prev) => {
       const next = !prev;
       if (next) {
-        // Randomize melody to fit active biome and turn on sequencer
         audioEngine.randomizeBiomeMelody(currentTheme);
         setSynthSettings((s) => ({
           ...s,
@@ -94,7 +82,6 @@ export default function App() {
     });
   }, [currentTheme]);
 
-  // Theme change: also automatically updates DSP audio effects and shows the gesture toast
   const handleThemeChange = useCallback((newTheme: ForestThemeKey) => {
     setCurrentTheme(newTheme);
     audioEngine.applyBiomeDsp(newTheme);
@@ -113,7 +100,6 @@ export default function App() {
       }));
     }
 
-    // Show temporary toast on sweep/switch
     setShowBiomeToast(true);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => {
@@ -121,7 +107,6 @@ export default function App() {
     }, 2400);
   }, []);
 
-  // Callback when a 3D nature prop is clicked/struck
   const handleObjectPlayed = useCallback(
     (type: ObjectPlayedEvent['type'], label: string, freq: number, noteName: string) => {
       setLastPlayed({
@@ -136,7 +121,6 @@ export default function App() {
     []
   );
 
-  // Keyboard shortcut listener for Mute (M)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['input', 'textarea'].includes((e.target as HTMLElement)?.tagName?.toLowerCase())) return;
@@ -148,12 +132,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleToggleMute]);
 
-  // Handle virtual joystick analog 2D movement
   const handleJoystickMove = useCallback((x: number, y: number) => {
     setJoystickVector({ x, y });
   }, []);
 
-  // Pulse action
   const handlePulse = useCallback(() => {
     window.dispatchEvent(
       new KeyboardEvent('keydown', {
@@ -168,7 +150,6 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black font-sans select-none">
-      {/* 3D WebGL Circular Little-Planet Canvas */}
       <ForestScene
         currentTheme={currentTheme}
         selectedMode={synthSettings.selectedMode}
@@ -179,7 +160,6 @@ export default function App() {
         onObjectPlayed={handleObjectPlayed}
       />
 
-      {/* Everywhere Transparent Touch Joystick for Mobile/Tablet */}
       {hasEntered && !isAutoExploring && (
         <TransparentJoystick
           accentColor={activeThemeObj.accentColor}
@@ -188,10 +168,8 @@ export default function App() {
         />
       )}
 
-      {/* Floating Biome Gesture Notification Toast */}
       <BiomeGestureToast theme={activeThemeObj} show={showBiomeToast} />
 
-      {/* Top Floating Minimal Info Bar - Futuristic Green Society Style */}
       <div className="fixed top-3 left-3 z-30 flex items-center gap-2 pointer-events-none">
         <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#03150e]/85 border border-emerald-500/25 backdrop-blur-xl shadow-[0_0_20px_rgba(4,40,25,0.4)] pointer-events-auto">
           <span
@@ -216,14 +194,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* Top Right Zen Quote */}
       <div className="fixed top-3 right-3 z-30 hidden sm:flex items-center gap-2 pointer-events-none">
         <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#03150e]/85 border border-emerald-500/25 backdrop-blur-xl shadow-[0_0_20px_rgba(4,40,25,0.4)] text-[11px] font-mono pointer-events-auto">
           <span className="italic text-emerald-200/90 font-light tracking-wide">&ldquo;you don&apos;t play you listen.&rdquo;</span>
         </div>
       </div>
 
-      {/* Collapsible Unified Bottom Control Dock */}
       {hasEntered && (
         <ControlDock
           currentTheme={currentTheme}
@@ -239,7 +215,6 @@ export default function App() {
         />
       )}
 
-      {/* Splash / Audio Unlock Modal */}
       {!hasEntered && (
         <EnterScreen onEnter={handleEnter} currentTheme={currentTheme} />
       )}
