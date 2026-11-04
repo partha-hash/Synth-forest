@@ -30,6 +30,7 @@ interface ForestSceneProps {
   bloomEnabled: boolean;
   isAutoExploring?: boolean;
   joystickVector: { x: number; y: number };
+  isEcosystemMode?: boolean;
   onThemeCycle?: (newTheme: ForestThemeKey) => void;
   onObjectPlayed?: (
     type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower' | 'ground',
@@ -95,6 +96,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   bloomEnabled,
   isAutoExploring = false,
   joystickVector,
+  isEcosystemMode = false,
   onThemeCycle,
   onObjectPlayed,
 }) => {
@@ -109,6 +111,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   autoExploreRef.current = isAutoExploring;
   const joystickRef = useRef(joystickVector);
   joystickRef.current = joystickVector;
+  const ecosystemModeRef = useRef(isEcosystemMode);
+  ecosystemModeRef.current = isEcosystemMode;
   const onThemeCycleRef = useRef(onThemeCycle);
   onThemeCycleRef.current = onThemeCycle;
   const onObjectPlayedRef = useRef(onObjectPlayed);
@@ -1385,6 +1389,20 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
           break;
       }
 
+      // In Living Ecosystem mode, each interaction becomes part of a connected soundscape:
+      // nearby-sounding harmonics and subtle environmental textures respond to the object.
+      if (ecosystemModeRef.current) {
+        const harmonic = prop.freq * (prop.type === 'tree' || prop.type === 'flower' ? 1.5 : 2);
+        window.setTimeout(() => {
+          if (ecosystemModeRef.current) audioEngine.triggerNaturePad(harmonic, prop.subtype ?? 1);
+        }, 110);
+        if (prop.type === 'bush' || prop.type === 'mushroom') {
+          window.setTimeout(() => {
+            if (ecosystemModeRef.current) audioEngine.triggerBushNoiseImpact(0.22);
+          }, 220);
+        }
+      }
+
       onObjectPlayedRef.current?.(prop.type, prop.name, prop.freq, prop.noteName);
     };
 
@@ -1696,6 +1714,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         const inside = distance < animal.zoneRadius;
         if (inside && !animal.wasInside && elapsed - animal.lastSoundAt > 5) {
           audioEngine.triggerAnimalChord(animal.freq, animal.character);
+          if (ecosystemModeRef.current) {
+            window.setTimeout(() => {
+              if (ecosystemModeRef.current) audioEngine.triggerNaturePad(animal.freq * 1.5, animal.character);
+            }, 180);
+          }
           animal.lastSoundAt = elapsed;
         }
         animal.wasInside = inside;
