@@ -1,13 +1,3 @@
-/**
- * redowan's synth forest - 3D Nature Scene
- * Features:
- * - Circular Little-Planet Curvature & Toroidal Wrapping
- * - Integrated Irregular Pond with animated water ripples & shoreline flora
- * - Dedicated Animal Habitats (6.5m clear spatial buffer around all fauna)
- * - Soft Lush Sine-Wave Scale-Tuned Animal Chord Harmonies
- * - Touch & drag camera controls, fireflies, spore particles, and UnrealBloomPass
- */
-
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -20,7 +10,6 @@ import {
   ModeKey,
   MusicalMode,
   MUSICAL_MODES,
-  THEME_KEYS_ORDER,
 } from '../types/synth';
 
 interface ForestSceneProps {
@@ -85,15 +74,6 @@ interface ForestAnimal {
   wingParts?: THREE.Object3D[];
 }
 
-interface PondPlant {
-  group: THREE.Group;
-  freq: number;
-  phase: number;
-  type: 'lotus' | 'cattail';
-  label: string;
-  baseY: number;
-}
-
 const _moveDir = new THREE.Vector3();
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -103,7 +83,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   bloomEnabled,
   isAutoExploring = false,
   joystickVector,
-  onThemeCycle,
   onObjectPlayed,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -113,12 +92,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
   modeRef.current = selectedMode;
   const bloomRef = useRef(bloomEnabled);
   bloomRef.current = bloomEnabled;
-  const autoExploreRef = useRef(isAutoExploring);
-  autoExploreRef.current = isAutoExploring;
   const joystickRef = useRef(joystickVector);
   joystickRef.current = joystickVector;
-  const onThemeCycleRef = useRef(onThemeCycle);
-  onThemeCycleRef.current = onThemeCycle;
   const onObjectPlayedRef = useRef(onObjectPlayed);
   onObjectPlayedRef.current = onObjectPlayed;
 
@@ -126,7 +101,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const container = mountRef.current;
     if (!container) return;
 
-    // Safe WebGL Context & Software GPU Detection Guard
     const isSoftwareGl = (() => {
       try {
         const canvas = document.createElement('canvas');
@@ -142,18 +116,15 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
     })();
 
-    // 1. Scene & Fog Setup
     const scene = new THREE.Scene();
     const initialTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
     scene.background = new THREE.Color(initialTheme.fogColor);
     scene.fog = new THREE.FogExp2(initialTheme.fogColor, 0.02);
 
-    // 2. Camera Setup
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 400);
     camera.position.set(0, 2.4, 8);
     camera.rotation.order = 'YXZ';
 
-    // 3. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
       powerPreference: 'high-performance',
@@ -167,7 +138,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 4. UnrealBloomPass Post-Processing
     let composer: EffectComposer | null = null;
     let bloomPass: UnrealBloomPass | null = null;
 
@@ -185,7 +155,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       composer.addPass(bloomPass);
     }
 
-    // 5. Lighting Setup
     const ambientLight = new THREE.AmbientLight(initialTheme.ambientLightColor, 1.7);
     scene.add(ambientLight);
 
@@ -196,7 +165,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     dirLight.position.set(35, 55, 30);
     scene.add(dirLight);
 
-    // 6. Terrain & Pond Mathematics
     const planetRadius = 135;
     const worldBoundRadius = 60;
 
@@ -235,7 +203,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       return baseHeight;
     };
 
-    // Circular Disc Terrain
     const terrainGeo = new THREE.RingGeometry(0.1, 74, 48, 64);
     terrainGeo.rotateX(-Math.PI / 2);
     const posAttr = terrainGeo.attributes.position;
@@ -278,7 +245,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     atmoRing.position.y = -20;
     scene.add(atmoRing);
 
-    // Integrated Pond Mesh
     const pondY = getLittlePlanetHeight(pondCenter.x, pondCenter.y);
     const pondSegments = 64;
     const pondShape = new THREE.Shape();
@@ -350,7 +316,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     shoreMesh.position.set(pondCenter.x, pondY, pondCenter.y);
     scene.add(shoreMesh);
 
-    // 7. Animal Spawns with Spatial Clearance Buffer
     const animalSpawns = [
       { kind: 'bunny' as const, x: -16, z: -18, freq: 392, label: 'Forest Bunny' },
       { kind: 'deer' as const, x: 24, z: -24, freq: 293.66, label: 'Grove Deer' },
@@ -379,7 +344,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       };
     };
 
-    // Shared Materials
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x361f14, roughness: 0.88 });
     const woodCoreMat = new THREE.MeshStandardMaterial({ color: 0xd97736, roughness: 0.65 });
     const logMat = new THREE.MeshStandardMaterial({ color: 0x442617, roughness: 0.85 });
@@ -388,10 +352,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.74, initialTheme.foliageLightness),
       roughness: 0.35,
       metalness: 0.22,
-    });
-    const bushMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color().setHSL(initialTheme.foliageHue, 0.6, initialTheme.foliageLightness * 0.9),
-      roughness: 0.6,
     });
     const mushroomCapMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(initialTheme.accentColor),
@@ -427,14 +387,11 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       });
     };
 
-    // 8. Wildlife Mesh Construction
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
       cream: new THREE.MeshStandardMaterial({ color: 0xd8c6a4, roughness: 0.92 }),
       brown: new THREE.MeshStandardMaterial({ color: 0x805238, roughness: 0.95 }),
-      dark: new THREE.MeshStandardMaterial({ color: 0x292b32, roughness: 0.9 }),
       tan: new THREE.MeshStandardMaterial({ color: 0xb88754, roughness: 0.9 }),
-      white: new THREE.MeshStandardMaterial({ color: 0xe8e6dd, roughness: 0.75 }),
       green: new THREE.MeshStandardMaterial({ color: 0x6b9b54, roughness: 0.8 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
       eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
@@ -500,7 +457,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       });
     });
 
-    // 9. Clustered Flora Placement with Animal Clearance Validation
     const groveCenters = [
       { x: -25, z: -22 },
       { x: 26, z: -26 },
@@ -524,7 +480,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       return { x: grove.x + 6, z: grove.z + 6, y: getLittlePlanetHeight(grove.x + 6, grove.z + 6) };
     };
 
-    // A. Pines (68 Trees)
     for (let i = 0; i < 68; i++) {
       const treeGroup = new THREE.Group();
       const scaleRatio = 0.8 + Math.random() * 0.4;
@@ -543,7 +498,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.name})`);
     }
 
-    // B. Bioluminescent Mushrooms (26)
     for (let i = 0; i < 26; i++) {
       const shroomGroup = new THREE.Group();
       const mScale = 0.75 + Math.random() * 0.6;
@@ -562,7 +516,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(shroomGroup, 'mushroom', note.freq * 1.25, note.noteName, `Spore Bell (${note.name})`, cap, subtype);
     }
 
-    // C. Wood Stumps (26)
     for (let i = 0; i < 26; i++) {
       const stumpGroup = new THREE.Group();
       const outerBark = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.15, 0.85, 8), trunkMat);
@@ -578,7 +531,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(stumpGroup, 'stump', note.freq * 0.72, note.noteName, `Wood Tongue Drum (${note.name})`);
     }
 
-    // D. Marimba Logs (22)
     for (let i = 0; i < 22; i++) {
       const logGroup = new THREE.Group();
       const mainLog = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 3.8, 8), logMat);
@@ -593,7 +545,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(logGroup, 'log', note.freq * 0.88, note.noteName, `Marimba Log (${note.name})`);
     }
 
-    // E. Mineral Stones (28)
     for (let i = 0; i < 28; i++) {
       const stoneGroup = new THREE.Group();
       const s1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), stoneMat);
@@ -607,7 +558,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       registerProp(stoneGroup, 'stone', note.freq * 1.55, note.noteName, `Mineral Stone (${note.name})`);
     }
 
-    // 10. Fireflies System
     const fireflyCount = 130;
     const fireflyGeo = new THREE.BufferGeometry();
     const fireflyPositions = new Float32Array(fireflyCount * 3);
@@ -636,7 +586,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const fireflyPoints = new THREE.Points(fireflyGeo, fireflyMat);
     scene.add(fireflyPoints);
 
-    // 11. Shockwave & Splash Systems
     const shockwaves: ShockwaveRing[] = [];
     const splashLights: SplashPointLight[] = [];
     const splashSparks: SplashSpark[] = [];
@@ -675,7 +624,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
     };
 
-    // 12. Audio Interaction Triggers (Sine-Wave Harmony Chords)
     const triggerAnimalSound = (animal: ForestAnimal) => {
       triggerGroundSplashEffect(animal.posX, animal.posY, animal.posZ, 0xfbbf24);
       audioEngine.triggerAnimalChord(animal.freq, animal.kind);
@@ -756,7 +704,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const onSceneClick = (e: MouseEvent) => performSceneInteraction(e.clientX, e.clientY);
     window.addEventListener('click', onSceneClick);
 
-    // 13. Movement & Controls
     let cameraYaw = 0;
     let cameraPitch = 0;
     let isMouseDragging = false;
@@ -800,7 +747,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     };
     window.addEventListener('resize', onResize);
 
-    // 14. Render Loop with Safe Composer Guard
     let animFrameId = 0;
     const clock = new THREE.Clock();
 
@@ -809,7 +755,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const delta = Math.min(clock.getDelta(), 0.1);
       const elapsed = clock.getElapsedTime();
 
-      // Theme Sync
       const activeTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
       scene.background = new THREE.Color(activeTheme.fogColor);
       (scene.fog as THREE.FogExp2).color.set(activeTheme.fogColor);
@@ -826,7 +771,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         bloomPass.threshold = activeTheme.bloomThreshold;
       }
 
-      // Joystick Movement
       _moveDir.set(0, 0, 0);
       const jv = joystickRef.current;
       if (jv && (Math.abs(jv.x) > 0.05 || Math.abs(jv.y) > 0.05)) {
@@ -858,7 +802,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const targetGroundY = getLittlePlanetHeight(camera.position.x, camera.position.z);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, targetGroundY + 1.85, 10, delta);
 
-      // Water Ripple Animation
       const wPos = pondWaterGeo.attributes.position;
       for (let i = 0; i < wPos.count; i++) {
         const origY = pondOriginalY[i];
@@ -868,7 +811,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
       pondWaterGeo.attributes.position.needsUpdate = true;
 
-      // Animal Idle Breathing & Proximity Detection
       const playerXZ = new THREE.Vector2(camera.position.x, camera.position.z);
       for (const animal of forestAnimals) {
         animal.group.position.y = animal.posY + Math.sin(elapsed * 1.8 + animal.phase) * 0.02;
@@ -882,7 +824,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         animal.wasInside = inside;
       }
 
-      // Prop Scale Bounce
       for (const prop of interactiveProps) {
         if (prop.animTimer > 0) {
           prop.animTimer = Math.max(0, prop.animTimer - delta * 3.4);
@@ -897,7 +838,6 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         }
       }
 
-      // Safe Composer Render Guard
       if (composer && bloomRef.current) {
         composer.render();
       } else {
