@@ -339,25 +339,6 @@ export class AudioEngine {
     oscA.onended = () => { oscA.disconnect(); oscB.disconnect(); oscC.disconnect(); filter.disconnect(); amp.disconnect(); shimmer.disconnect(); };
   }
 
-  // Play a user-supplied recorded melody as a discovery reward.
-  public async playDiscoveryReward(data: ArrayBuffer): Promise<void> {
-    if (!this.ctx || this.isMuted) return;
-    try {
-      const buffer = await this.ctx.decodeAudioData(data.slice(0));
-      const source = this.ctx.createBufferSource();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
-      source.buffer = buffer;
-      filter.type = 'lowpass';
-      filter.frequency.value = 10500;
-      gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.8, this.ctx.currentTime + 0.35);
-      gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime + Math.max(0.5, buffer.duration - 0.7), 0.35);
-      source.connect(filter); filter.connect(gain); gain.connect(this.masterGain || this.ctx.destination);
-      source.start();
-      source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
-    } catch (error) { console.warn('Could not decode discovery reward audio', error); }
-  }
 
   // --- Wildlife: soft sustained ambient chord voice ---
   // Kept separate from the continuous sub-bass and existing nature-pad voices.
