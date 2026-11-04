@@ -327,19 +327,18 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     // Wildlife stationary habitats & ambient synthesizer setup
     const forestAnimals: ForestAnimal[] = [];
     const animalMats = {
-      cream: new THREE.MeshStandardMaterial({ color: 0xf4e4c7, roughness: 0.82, emissive: 0x554027, emissiveIntensity: 0.16 }),
-      brown: new THREE.MeshStandardMaterial({ color: 0x9b5731, roughness: 0.82, emissive: 0x3a1c0c, emissiveIntensity: 0.18 }),
+      cream: new THREE.MeshStandardMaterial({ color: 0xf0dfbd, roughness: 0.82, emissive: 0x3b2916, emissiveIntensity: 0.12 }),
+      brown: new THREE.MeshStandardMaterial({ color: 0xa66a43, roughness: 0.82, emissive: 0x241006, emissiveIntensity: 0.14 }),
       dark: new THREE.MeshStandardMaterial({ color: 0x292b32, roughness: 0.82 }),
-      tan: new THREE.MeshStandardMaterial({ color: 0xe2ad68, roughness: 0.82, emissive: 0x56330e, emissiveIntensity: 0.16 }),
+      tan: new THREE.MeshStandardMaterial({ color: 0xd6a064, roughness: 0.82, emissive: 0x39200b, emissiveIntensity: 0.12 }),
       white: new THREE.MeshStandardMaterial({ color: 0xfff7e8, roughness: 0.65, emissive: 0x55442c, emissiveIntensity: 0.12 }),
-      green: new THREE.MeshStandardMaterial({ color: 0x8fcf58, roughness: 0.78, emissive: 0x244b12, emissiveIntensity: 0.2 }),
+      green: new THREE.MeshStandardMaterial({ color: 0x91c96a, roughness: 0.78, emissive: 0x1b3810, emissiveIntensity: 0.16 }),
       gold: new THREE.MeshStandardMaterial({ color: 0xf0c779, roughness: 0.68, emissive: 0x53340b, emissiveIntensity: 0.14 }),
       eye: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35 }),
       glow: new THREE.MeshStandardMaterial({ color: 0xc4b5fd, emissive: 0x8b5cf6, emissiveIntensity: 1.4 }),
     };
-    // Shared faceted primitives give wildlife a consistent low-poly diorama style.
-    const animalSphere = new THREE.IcosahedronGeometry(1, 0);
-    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 5);
+    const animalSphere = new THREE.SphereGeometry(1, 16, 12);
+    const animalCone = new THREE.ConeGeometry(0.16, 0.55, 8);
 
     const makeAnimal = (
       kind: ForestAnimal['kind'],
@@ -429,25 +428,9 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         }
       }
 
-      // Four clearly separated faceted legs make land animals readable from a distance.
-      if (kind === 'bunny' || kind === 'deer' || kind === 'bear') {
-        const legMat = kind === 'deer' ? animalMats.tan : (kind === 'bunny' ? animalMats.cream : animalMats.brown);
-        const legHeight = kind === 'deer' ? 0.43 : (kind === 'bunny' ? 0.22 : 0.34);
-        const legRadius = kind === 'deer' ? 0.075 : (kind === 'bunny' ? 0.09 : 0.14);
-        const legGeo = new THREE.CylinderGeometry(legRadius * 0.82, legRadius, legHeight, 5);
-        for (const lx of [-0.22, 0.22]) {
-          for (const lz of [-0.28, 0.28]) {
-            const leg = new THREE.Mesh(legGeo, legMat);
-            leg.position.set(lx, legHeight * 0.48, lz);
-            leg.castShadow = true;
-            group.add(leg);
-          }
-        }
-      }
-
       const y = getLittlePlanetHeight(x, z);
       group.position.set(x, y + 0.06, z);
-      group.scale.setScalar(kind === 'frog' || kind === 'cricket' ? 1.55 : 1.62);
+      group.scale.setScalar(1.38);
       group.userData = { isAnimal: true, kind, freq, character };
       scene.add(group);
 
@@ -590,13 +573,13 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         flower.add(center);
         g.add(flower);
       } else {
-        for (let i = 0; i < 3; i++) {
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.2 + i * 0.15, 5), cattailMat);
-          stem.position.set((i - 1) * 0.2, 0.68, 0);
+        for (let i = 0; i < 4; i++) {
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.15 + (i % 2) * 0.22, 5), cattailMat);
+          stem.position.set((i - 1.5) * 0.2, 0.68, (i % 2) * 0.12);
           stem.rotation.z = (i - 1) * 0.12;
           g.add(stem);
           const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.38, 6), cattailHeadMat);
-          head.position.set((i - 1) * 0.2, 1.42 + i * 0.15, 0);
+          head.position.set((i - 1.5) * 0.2, 1.42 + (i % 2) * 0.18, (i % 2) * 0.12);
           g.add(head);
         }
       }
@@ -610,6 +593,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     addPondPlant(1.8, -2.0, 'lotus', 587.33, 2.0);
     addPondPlant(-3.5, 1.9, 'cattail', 261.63, 2.8);
     addPondPlant(3.6, -0.8, 'cattail', 293.66, 3.5);
+    addPondPlant(-4.2, -2.7, 'cattail', 329.63, 4.1);
+    addPondPlant(4.1, 2.6, 'cattail', 349.23, 4.8);
+    addPondPlant(-1.0, 4.5, 'cattail', 392.0, 5.5);
+    addPondPlant(1.4, -4.4, 'cattail', 440.0, 6.2);
 
     // 2D Polygon Point-In-Polygon Collision Checker for Irregular Pond Edge
     const isPointInPolygon = (pt: THREE.Vector2, poly: THREE.Vector2[]) => {
@@ -634,23 +621,26 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       { x: -2, z: 36 },
     ];
 
-    // Keep a clear habitat pocket around every animal so foliage and props never
-    // obscure the low-poly silhouettes. Retry random placements, then use a safe fallback.
     const getClusteredPosition = (index: number, maxRadius: number) => {
       const grove = groveCenters[index % groveCenters.length];
-      let x = grove.x;
-      let z = grove.z;
-      for (let attempt = 0; attempt < 36; attempt++) {
-        const offsetRadius = Math.random() * maxRadius;
-        const angle = Math.random() * Math.PI * 2;
-        x = grove.x + Math.cos(angle) * offsetRadius;
-        z = grove.z + Math.sin(angle) * offsetRadius;
-        const clearOfAnimals = forestAnimals.every((animal) =>
-          Math.hypot(x - animal.anchorX, z - animal.anchorZ) > 9.0
-        );
-        if (clearOfAnimals) break;
-      }
+      const offsetRadius = Math.random() * maxRadius;
+      const angle = Math.random() * Math.PI * 2;
+      const x = grove.x + Math.cos(angle) * offsetRadius;
+      const z = grove.z + Math.sin(angle) * offsetRadius;
       return { x, z, y: getLittlePlanetHeight(x, z) };
+    };
+
+    // New decorative assets avoid the animal habitat clearings and central pond.
+    const getScenicPosition = (index: number, maxRadius: number) => {
+      for (let attempt = 0; attempt < 36; attempt++) {
+        const candidate = getClusteredPosition(index + attempt * 3, maxRadius);
+        const nearAnimal = forestAnimals.some((animal) =>
+          Math.hypot(candidate.x - animal.anchorX, candidate.z - animal.anchorZ) < animal.zoneRadius + 3.5
+        );
+        const nearPond = Math.hypot(candidate.x, candidate.z) < 9.5;
+        if (!nearAnimal && !nearPond) return candidate;
+      }
+      return getClusteredPosition(index, maxRadius + 8);
     };
 
     // --- A. Clustered Crystal Pines ---
@@ -664,112 +654,163 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       trunk.position.y = 1.2 * scaleRatio;
       treeGroup.add(trunk);
 
-      const treeKind = i % 3; // 0: crystal pine, 1: broadleaf, 2: layered cedar
-      let topper: THREE.Mesh;
-      if (treeKind === 1) {
-        // Clustered faceted crowns add the rounded low-poly deciduous trees from the references.
-        const crownMat = new THREE.MeshStandardMaterial({
-          color: i % 8 === 0 ? 0x6f9b58 : 0x83a963, roughness: 0.9,
-          emissive: 0x172b10, emissiveIntensity: 0.12, flatShading: true,
-        });
-        const crownGeo = new THREE.IcosahedronGeometry(1.65 * scaleRatio, 0);
-        const crownPositions = [[0, 3.35, 0], [-0.95, 3.0, 0.15], [0.9, 3.05, -0.1], [0, 4.05, 0.1], [0.1, 2.85, -0.9]];
-        crownPositions.forEach(([cx, cy, cz], idx) => {
-          const crown = new THREE.Mesh(crownGeo, crownMat);
-          crown.position.set(cx * scaleRatio, cy * scaleRatio, cz * scaleRatio);
-          crown.scale.setScalar(idx === 0 ? 1 : 0.72);
-          crown.castShadow = true; crown.receiveShadow = true;
-          treeGroup.add(crown);
-        });
-        const topperMat = new THREE.MeshBasicMaterial({ color: initialTheme.fireflyColor, wireframe: true });
-        topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.28 * scaleRatio, 0), topperMat);
-        topper.position.y = 5.0 * scaleRatio;
-      } else if (treeKind === 2) {
-        const cedarMat = new THREE.MeshStandardMaterial({ color: 0x547c68, roughness: 0.92, flatShading: true });
-        const layers = [
-          { r: 2.15, h: 1.8, y: 2.0 },
-          { r: 1.7, h: 1.65, y: 3.15 },
-          { r: 1.2, h: 1.45, y: 4.25 },
-        ];
-        layers.forEach((layer, idx) => {
-          const foliage = new THREE.Mesh(new THREE.ConeGeometry(layer.r * scaleRatio, layer.h * scaleRatio, 5), cedarMat);
-          foliage.position.y = layer.y * scaleRatio;
-          foliage.rotation.y = idx * 0.45;
-          treeGroup.add(foliage);
-        });
-        const topperMat = new THREE.MeshBasicMaterial({ color: 0x9ccf9b, wireframe: true });
-        topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.32 * scaleRatio, 0), topperMat);
-        topper.position.y = 5.2 * scaleRatio;
-      } else {
-        const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1 * scaleRatio, 2.6 * scaleRatio, 6), pineMat);
-        f1.position.y = 2.4 * scaleRatio; f1.rotation.y = Math.random();
-        const f2 = new THREE.Mesh(new THREE.ConeGeometry(1.6 * scaleRatio, 2.2 * scaleRatio, 6), pineMat);
-        f2.position.y = 3.6 * scaleRatio; f2.rotation.y = Math.random();
-        const f3 = new THREE.Mesh(new THREE.ConeGeometry(1.1 * scaleRatio, 1.8 * scaleRatio, 6), pineMat);
-        f3.position.y = 4.8 * scaleRatio; f3.rotation.y = Math.random();
-        const topperMat = new THREE.MeshBasicMaterial({ color: initialTheme.fireflyColor, wireframe: true });
-        topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.4 * scaleRatio, 0), topperMat);
-        topper.position.y = 6.0 * scaleRatio;
-        treeGroup.add(f1, f2, f3);
-      }
-      treeGroup.add(topper);
+      const f1 = new THREE.Mesh(new THREE.ConeGeometry(2.1 * scaleRatio, 2.6 * scaleRatio, 7), pineMat);
+      f1.position.y = 2.4 * scaleRatio;
+      f1.rotation.y = Math.random();
+
+      const f2 = new THREE.Mesh(new THREE.ConeGeometry(1.6 * scaleRatio, 2.2 * scaleRatio, 7), pineMat);
+      f2.position.y = 3.6 * scaleRatio;
+      f2.rotation.y = Math.random();
+
+      const f3 = new THREE.Mesh(new THREE.ConeGeometry(1.1 * scaleRatio, 1.8 * scaleRatio, 7), pineMat);
+      f3.position.y = 4.8 * scaleRatio;
+      f3.rotation.y = Math.random();
+
+      const topperMat = new THREE.MeshBasicMaterial({
+        color: initialTheme.fireflyColor,
+        wireframe: true,
+      });
+      const topper = new THREE.Mesh(new THREE.OctahedronGeometry(0.4 * scaleRatio, 0), topperMat);
+      topper.position.y = 6.0 * scaleRatio;
+
+      treeGroup.add(f1, f2, f3, topper);
 
       const pos = getClusteredPosition(i, 20);
       treeGroup.position.set(pos.x, pos.y, pos.z);
       treeGroup.rotation.y = Math.random() * Math.PI * 2;
 
       const note = getModeNote(i);
-      const treeNames = ['Crystal Pine', 'Amber Canopy', 'Moss Cedar'];
-      registerProp(treeGroup, 'tree', note.freq, note.noteName, `${treeNames[treeKind]} (${note.name})`, topper, treeKind);
+      registerProp(treeGroup, 'tree', note.freq, note.noteName, `Crystal Pine (${note.name})`, topper, 0);
     }
 
-    // --- B. Bioluminescent Spore Mushrooms ---
-    const mushroomCount = 26;
-    const mushroomSubtypeNames = [
-      'Mooncup Fungus', 'Amber Bell Fungus', 'Deep Earth Puffball',
-      'Crystal Fan Fungus', 'Scarlet Parasol', 'Ghost Shelf Fungus',
+    // --- B. Low-poly woodland tree families: broadleaf, giant canopy and bare trees ---
+    // Shared low-poly foliage geometry keeps draw calls and geometry allocation modest.
+    const canopyLeafGeo = new THREE.IcosahedronGeometry(1, 0);
+    const canopyMats = [
+      new THREE.MeshStandardMaterial({ color: 0x6f9f45, roughness: 0.92 }),
+      new THREE.MeshStandardMaterial({ color: 0x8eb957, roughness: 0.92 }),
+      new THREE.MeshStandardMaterial({ color: 0x527d3d, roughness: 0.95 }),
+      new THREE.MeshStandardMaterial({ color: 0xb2c96a, roughness: 0.9 }),
     ];
+    const branchMat = new THREE.MeshStandardMaterial({ color: 0x62402b, roughness: 0.95 });
+    const makeBranch = (group: THREE.Group, start: THREE.Vector3, end: THREE.Vector3, radius = 0.12) => {
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius, direction.length(), 5), branchMat);
+      mesh.position.copy(start).add(end).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+      group.add(mesh);
+    };
+
+    // Broadleaf trees with angular, overlapping canopy clusters.
+    for (let i = 0; i < 17; i++) {
+      const group = new THREE.Group();
+      const scale = 0.9 + Math.random() * 0.45;
+      const trunkHeight = 2.5 * scale;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.38 * scale, trunkHeight, 6), branchMat);
+      trunk.position.y = trunkHeight * 0.5;
+      group.add(trunk);
+      const crownY = trunkHeight + 0.55 * scale;
+      const crownOffsets = [
+        [-1.05, 0.0, 0.0], [-0.48, 0.48, 0.48], [0.35, 0.32, -0.55],
+        [1.0, 0.02, 0.15], [0.0, 0.9, 0.0], [-0.2, -0.05, -0.8], [0.5, -0.12, 0.75],
+      ];
+      crownOffsets.forEach((o, j) => {
+        const leaf = new THREE.Mesh(canopyLeafGeo, canopyMats[(i + j) % canopyMats.length]);
+        leaf.position.set(o[0] * scale, crownY + o[1] * scale, o[2] * scale);
+        leaf.scale.set(0.95 * scale, 0.58 * scale, 0.78 * scale);
+        group.add(leaf);
+        if (j < 4) makeBranch(group, new THREE.Vector3(0, trunkHeight * 0.72, 0), new THREE.Vector3(o[0] * 0.72 * scale, crownY + o[1] * 0.65 * scale, o[2] * 0.72 * scale), 0.075 * scale);
+      });
+      const pos = getScenicPosition(i + 71, 26);
+      group.position.set(pos.x, pos.y, pos.z);
+      group.rotation.y = Math.random() * Math.PI * 2;
+      const note = getModeNote(i + 2);
+      registerProp(group, 'tree', note.freq, note.noteName, `Broadleaf Canopy (${note.name})`, undefined, 1);
+    }
+
+    // A few landmark giant canopy trees to create a strong sense of scale.
+    for (let i = 0; i < 4; i++) {
+      const group = new THREE.Group();
+      const scale = 1.8 + Math.random() * 0.45;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42 * scale, 0.68 * scale, 4.6 * scale, 7), branchMat);
+      trunk.position.y = 2.3 * scale;
+      group.add(trunk);
+      const crownY = 4.35 * scale;
+      for (let j = 0; j < 13; j++) {
+        const a = (j / 13) * Math.PI * 2;
+        const r = j % 3 === 0 ? 1.65 : 1.25;
+        const leaf = new THREE.Mesh(canopyLeafGeo, canopyMats[(i + j) % canopyMats.length]);
+        leaf.position.set(Math.cos(a) * r * scale, crownY + (j % 4) * 0.34 * scale, Math.sin(a) * r * scale);
+        leaf.scale.set(1.35 * scale, 0.72 * scale, 1.05 * scale);
+        group.add(leaf);
+        if (j % 3 === 0) makeBranch(group, new THREE.Vector3(0, 3.4 * scale, 0), leaf.position.clone().multiply(new THREE.Vector3(0.72, 0.82, 0.72)), 0.13 * scale);
+      }
+      const pos = getScenicPosition(i + 83, 30);
+      group.position.set(pos.x, pos.y, pos.z);
+      const note = getModeNote(i + 5);
+      registerProp(group, 'tree', note.freq * 0.75, note.noteName, `Elder Giant Canopy (${note.name})`, undefined, 3);
+    }
+
+    // Bare winter trees add silhouette and seasonal contrast.
+    for (let i = 0; i < 7; i++) {
+      const group = new THREE.Group();
+      const scale = 0.9 + Math.random() * 0.55;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * scale, 0.3 * scale, 3.8 * scale, 5), branchMat);
+      trunk.position.y = 1.9 * scale;
+      group.add(trunk);
+      const branches = [
+        [[0, 1.8, 0], [-0.9, 2.5, 0.05]], [[-0.9, 2.5, 0.05], [-1.25, 3.2, 0.1]],
+        [[0, 2.25, 0], [0.95, 2.9, -0.08]], [[0.95, 2.9, -0.08], [1.2, 3.55, -0.12]],
+        [[0, 2.9, 0], [-0.35, 3.55, -0.1]], [[-0.35, 3.55, -0.1], [-0.55, 4.15, -0.12]],
+        [[0, 3.25, 0], [0.38, 3.85, 0.1]], [[0.38, 3.85, 0.1], [0.5, 4.35, 0.12]],
+      ];
+      branches.forEach((b) => makeBranch(group, new THREE.Vector3(b[0][0], b[0][1], b[0][2]).multiplyScalar(scale), new THREE.Vector3(b[1][0], b[1][1], b[1][2]).multiplyScalar(scale), 0.085 * scale));
+      const pos = getScenicPosition(i + 91, 24);
+      group.position.set(pos.x, pos.y, pos.z);
+      const note = getModeNote(i + 9);
+      registerProp(group, 'tree', note.freq * 1.12, note.noteName, `Bare Branch Tree (${note.name})`, undefined, 2);
+    }
+
+    // --- C. Bioluminescent Spore Mushrooms ---
+    const mushroomCount = 42;
+    const mushroomSubtypeNames = ['Mooncup', 'Amber Bell', 'Deep Earth', 'Crystal Fan', 'Scarlet Toadstool', 'Ghost Shelf'];
+    const scarletCapMat = new THREE.MeshStandardMaterial({ color: 0xc9362e, roughness: 0.78 });
+    const paleCapMat = new THREE.MeshStandardMaterial({ color: 0xe7e0c9, roughness: 0.9 });
+    const mushroomSpotMat = new THREE.MeshStandardMaterial({ color: 0xfff2d6, roughness: 0.82 });
 
     for (let i = 0; i < mushroomCount; i++) {
       const shroomGroup = new THREE.Group();
       const mScale = 0.75 + Math.random() * 0.6;
       const subtype = i % 6;
-      const fungusPalette = [0x77c9b0, 0xd99a52, 0x8c9bc9, 0x8fd4e0, 0xc65d65, 0xd8d6c8];
-      const capMat = new THREE.MeshStandardMaterial({
-        color: fungusPalette[subtype], roughness: 0.72, flatShading: true,
-        emissive: fungusPalette[subtype], emissiveIntensity: 0.12,
-      });
-      const stemMat = subtype === 2 || subtype === 5 ? mushroomStemMat : new THREE.MeshStandardMaterial({ color: 0xe1d7bd, roughness: 0.9, flatShading: true });
+
       const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.14 * mScale, 0.25 * mScale, 0.95 * mScale, 6), stemMat
+        new THREE.CylinderGeometry(0.18 * mScale, 0.28 * mScale, 1.2 * mScale, 8),
+        mushroomStemMat
       );
-      stem.position.y = 0.47 * mScale;
-      let cap: THREE.Mesh;
-      if (subtype === 2) {
-        cap = new THREE.Mesh(new THREE.IcosahedronGeometry(0.58 * mScale, 0), capMat);
-      } else if (subtype === 3 || subtype === 5) {
-        cap = new THREE.Mesh(new THREE.ConeGeometry(0.78 * mScale, 0.5 * mScale, 5), capMat);
-        cap.rotation.x = Math.PI;
-      } else if (subtype === 4) {
-        cap = new THREE.Mesh(new THREE.SphereGeometry(0.78 * mScale, 7, 5), capMat);
-        cap.scale.y = 0.55;
-      } else {
-        cap = new THREE.Mesh(new THREE.SphereGeometry(0.78 * mScale, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.52), capMat);
+      stem.position.y = 0.6 * mScale;
+
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.85 * mScale, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        subtype === 4 ? scarletCapMat : subtype === 5 ? paleCapMat : mushroomCapMat
+      );
+      cap.position.y = 1.2 * mScale;
+      const dots: THREE.Mesh[] = [];
+      if (subtype === 4) {
+        for (let d = 0; d < 7; d++) {
+          const a = d * Math.PI * 2 / 7;
+          const spot = new THREE.Mesh(new THREE.SphereGeometry(0.095 * mScale, 5, 4), mushroomSpotMat);
+          spot.position.set(Math.cos(a) * 0.58 * mScale, 1.48 * mScale, Math.sin(a) * 0.58 * mScale);
+          spot.scale.y = 0.35; dots.push(spot);
+        }
       }
-      cap.position.y = 0.98 * mScale;
+      shroomGroup.add(stem, cap, ...dots);
 
-      const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.12 * mScale, 6, 6), dotMat);
-      dot.position.set(0.3 * mScale, 1.23 * mScale, 0.3 * mScale);
-
-      shroomGroup.add(stem, cap, dot);
-
-      const pos = getClusteredPosition(i + 2, 16);
+      const pos = getScenicPosition(i + 2, 16);
       shroomGroup.position.set(pos.x, pos.y, pos.z);
       shroomGroup.rotation.y = Math.random() * Math.PI * 2;
 
       const note = getModeNote(i + 4);
-      const freqMultiplier = subtype === 2 ? 0.72 : (subtype === 5 ? 0.92 : 1.18);
+      const freqMultiplier = subtype === 2 ? 0.75 : subtype === 5 ? 1.6 : 1.15;
       registerProp(
         shroomGroup,
         'mushroom',
@@ -915,17 +956,24 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     }
 
     // --- I. Small Wildflowers ---
-    const flowerCount = 36;
+    const flowerCount = 30;
+    const flowerPalette = [
+      new THREE.MeshStandardMaterial({ color: 0xd98bc7, roughness: 0.78 }),
+      new THREE.MeshStandardMaterial({ color: 0xf2e8d0, roughness: 0.78 }),
+      new THREE.MeshStandardMaterial({ color: 0xe9b94f, roughness: 0.78 }),
+      new THREE.MeshStandardMaterial({ color: 0xa8c9e8, roughness: 0.78 }),
+      new THREE.MeshStandardMaterial({ color: 0xe58b83, roughness: 0.78 }),
+    ];
     for (let i = 0; i < flowerCount; i++) {
       const flower = new THREE.Group();
       const scale = 0.7 + Math.random() * 0.45;
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.72 * scale, 5), flowerStemMat);
       stem.position.y = 0.36 * scale;
       const bloom = new THREE.Group();
-      const petalGeo = new THREE.SphereGeometry(0.105 * scale, 6, 5);
+      const petalGeo = new THREE.IcosahedronGeometry(0.12 * scale, 0);
       for (let p = 0; p < 5; p++) {
         const angle = (p / 5) * Math.PI * 2;
-        const petal = new THREE.Mesh(petalGeo, flowerPetalMat);
+        const petal = new THREE.Mesh(petalGeo, flowerPalette[i % flowerPalette.length]);
         petal.position.set(Math.cos(angle) * 0.16 * scale, 0, Math.sin(angle) * 0.16 * scale);
         petal.scale.set(1.0, 0.58, 1.45);
         bloom.add(petal);
