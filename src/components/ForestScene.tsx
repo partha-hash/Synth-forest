@@ -118,9 +118,15 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const container = mountRef.current;
     if (!container) return;
 
-    // Detect Software WebGL
+    // Detect constrained devices before allocating the scene's render targets.
+    // Mobile GPUs can report themselves as hardware-accelerated while still
+    // struggling with a full-resolution EffectComposer + bloom pipeline.
+    const isMobileDevice =
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 900;
+
     const isSoftwareGl = (() => {
-      const gl = document.createElement('canvas').getContext('webgl2');
+      const probeCanvas = document.createElement('canvas');
+      const gl = probeCanvas.getContext('webgl2');
       if (!gl) return true;
       const ext = gl.getExtension('WEBGL_debug_renderer_info');
       const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
@@ -128,6 +134,10 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       gl.getExtension('WEBGL_lose_context')?.loseContext();
       return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
     })();
+
+    // Mobile-safe rendering: avoid two extra full-screen render targets used by
+    // bloom and keep the drawing buffer close to the device's native pixel size.
+    const usePostProcessing = !isSoftwareGl && !isMobileDevice;
 
     // 1. Scene & Lucid Fog
     const scene = new THREE.Scene();
@@ -142,13 +152,18 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
     // 3. Renderer with ACES Tone Mapping
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
-      powerPreference: 'high-performance',
+      antialias: !isSoftwareGl && !isMobileDevice,
+      powerPreference: isMobileDevice ? 'default' : 'high-performance',
+      alpha: false,
+      stencil: false,
+      depth: true,
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(
+      isSoftwareGl || isMobileDevice ? 1 : Math.min(window.devicePixelRatio, 1.75)
+    );
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     container.innerHTML = '';
@@ -158,7 +173,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     let composer: EffectComposer | null = null;
     let bloomPass: UnrealBloomPass | null = null;
 
-    if (!isSoftwareGl) {
+    if (usePostProcessing) {
       composer = new EffectComposer(renderer);
       const renderPass = new RenderPass(scene, camera);
       composer.addPass(renderPass);
@@ -1644,7 +1659,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
 
       // Render Loop
-      if (composer && bloomRef.current) {
+      if (composer && bloomRef.current && !isMobileDevice) {
         composer.render();
       } else {
         renderer.render(scene, camera);
