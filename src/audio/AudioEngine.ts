@@ -339,6 +339,26 @@ export class AudioEngine {
     oscA.onended = () => { oscA.disconnect(); oscB.disconnect(); oscC.disconnect(); filter.disconnect(); amp.disconnect(); shimmer.disconnect(); };
   }
 
+  // Play a user-supplied recorded melody as a discovery reward.
+  public async playDiscoveryReward(data: ArrayBuffer): Promise<void> {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const buffer = await this.ctx.decodeAudioData(data.slice(0));
+      const source = this.ctx.createBufferSource();
+      const gain = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+      source.buffer = buffer;
+      filter.type = 'lowpass';
+      filter.frequency.value = 10500;
+      gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.8, this.ctx.currentTime + 0.35);
+      gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime + Math.max(0.5, buffer.duration - 0.7), 0.35);
+      source.connect(filter); filter.connect(gain); gain.connect(this.masterGain || this.ctx.destination);
+      source.start();
+      source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+    } catch (error) { console.warn('Could not decode discovery reward audio', error); }
+  }
+
   // --- Wildlife: soft sustained ambient chord voice ---
   // Kept separate from the continuous sub-bass and existing nature-pad voices.
   public triggerAnimalChord(rootFreq: number, character: number = 0) {
@@ -966,32 +986,32 @@ export class AudioEngine {
     this.applyBiomeDsp(themeKey);
 
     let targetMode: ModeKey = 'dorian';
-    let targetBpm = 108;
+    let targetBpm = 90;
 
     switch (themeKey) {
       case 'astral':
         targetMode = Math.random() > 0.5 ? 'lydian' : 'pentatonicMinor';
-        targetBpm = 94;
+        targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'abyssal':
         targetMode = Math.random() > 0.5 ? 'phrygian' : 'locrian';
-        targetBpm = 82;
+        targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'solar':
         targetMode = Math.random() > 0.5 ? 'mixolydian' : 'ionian';
-        targetBpm = 112;
+        targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'cyberpunk':
         targetMode = 'dorian';
-        targetBpm = 126;
+        targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'glacial':
         targetMode = Math.random() > 0.5 ? 'aeolian' : 'lydian';
-        targetBpm = 88;
+        targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'fungal':
         targetMode = Math.random() > 0.5 ? 'akebono' : 'phrygian';
-        targetBpm = 102;
+        targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
     }
 
