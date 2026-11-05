@@ -553,6 +553,57 @@ export class AudioEngine {
     osc.onended = () => { osc.disconnect(); osc2.disconnect(); filter.disconnect(); amp.disconnect(); shimmer.disconnect(); };
   }
 
+  // Fruit interaction: slow pitch drift, soft saturation, moving filter and a long ambient tail.
+  public triggerPsychedelicFruit(freq: number, variety: number = 0) {
+    if (!this.ctx || !this.effectsBus || this.isMuted) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const safeFreq = Math.max(90, Math.min(1400, freq));
+    const osc = ctx.createOscillator();
+    const sub = ctx.createOscillator();
+    const lfo = ctx.createOscillator();
+    const lfoDepth = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    const shaper = ctx.createWaveShaper();
+    const amp = ctx.createGain();
+    const curve = new Float32Array(256);
+    const drive = 1.8 + (Math.abs(variety) % 4) * 0.55;
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i * 2) / (curve.length - 1) - 1;
+      curve[i] = Math.tanh(x * drive);
+    }
+    shaper.curve = curve;
+    shaper.oversample = '2x';
+    osc.type = variety % 2 === 0 ? 'triangle' : 'sine';
+    sub.type = 'sine';
+    osc.frequency.setValueAtTime(safeFreq, now);
+    sub.frequency.setValueAtTime(safeFreq * (variety % 3 === 0 ? 1.5 : 0.5), now);
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(0.035 + (Math.abs(variety) % 3) * 0.018, now);
+    lfoDepth.gain.setValueAtTime(22 + (Math.abs(variety) % 3) * 9, now);
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(osc.detune);
+    filter.type = 'lowpass';
+    filter.Q.setValueAtTime(2.2 + (Math.abs(variety) % 3) * 0.5, now);
+    filter.frequency.setValueAtTime(2600, now);
+    filter.frequency.exponentialRampToValueAtTime(480 + (Math.abs(variety) % 3) * 130, now + 4.5);
+    filter.frequency.linearRampToValueAtTime(1800, now + 8.5);
+    amp.gain.setValueAtTime(0.0001, now);
+    amp.gain.linearRampToValueAtTime(0.105, now + 0.65);
+    amp.gain.setTargetAtTime(0.0001, now + 5.5, 1.8);
+    osc.connect(shaper);
+    sub.connect(shaper);
+    shaper.connect(filter);
+    filter.connect(amp);
+    amp.connect(this.effectsBus);
+    osc.start(now); sub.start(now); lfo.start(now);
+    osc.stop(now + 10); sub.stop(now + 8.5); lfo.stop(now + 9);
+    osc.onended = () => {
+      osc.disconnect(); sub.disconnect(); lfo.disconnect(); lfoDepth.disconnect();
+      shaper.disconnect(); filter.disconnect(); amp.disconnect();
+    };
+  }
+
   // Alias for backward compatibility
   public triggerMushroomChime(freq: number) {
     this.triggerMushroomSound(freq, Math.floor(Math.random() * 4));
@@ -838,23 +889,37 @@ export class AudioEngine {
     const mode = MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
     const maxDegree = Math.min(mode.notes.length - 1, 7);
 
-    // Warm, familiar four-bar harmony: root, colour, fifth, gentle turnaround.
-    const colour = Math.min(2, maxDegree);
-    this.bassPattern = [0, Math.random() > 0.28 ? colour : null, Math.min(4, maxDegree), Math.random() > 0.35 ? 1 : null];
+    // Four-bar atmospheric bass phrase: only 2-3 sustained notes per cycle.
+    // Empty bars are intentional rests that leave room for the pads and ambience.
+    const colorDegree = Math.random() > 0.5 ? 2 : Math.min(3, maxDegree);
+    const fifthDegree = Math.min(4, maxDegree);
+    this.bassPattern = [0, Math.random() > 0.55 ? colorDegree : null, fifthDegree, Math.random() > 0.5 ? 1 : null];
     this.bassBarIndex = 0;
 
-    // Four related, singable 1-bar motifs. Rests and repeated notes keep the
-    // phrase spacious; scale degrees are shared by every selected musical mode.
-    const motifs: (number | null)[][] = [
-      [0, null, 2, null, 4, null, 2, null, 1, null, 2, null, 0, null, null, null],
-      [0, null, 2, 4, null, 4, 2, null, 1, null, 2, null, 0, null, 1, null],
-      [4, null, 2, null, 0, null, 1, null, 2, null, 4, null, 2, null, 0, null],
-      [0, null, null, 2, 4, null, 5, null, 4, null, 2, null, 1, null, 0, null],
-    ];
-    const motif = motifs[Math.floor(Math.random() * motifs.length)];
-    const pattern = motif.map((degree) => degree === null ? null : Math.min(degree, maxDegree));
-    // Occasional gentle pickup, never a fully random note.
-    if (Math.random() < 0.35) pattern[15] = Math.min(1, maxDegree);
+    // 2. Generate 16 16th-note melody steps in 4/4 time
+    const pattern: (number | null)[] = new Array(16).fill(null);
+
+    // Beat 1 downbeat (step 0): Root or octave
+    pattern[0] = Math.random() > 0.3 ? 0 : 7;
+
+    // Beat 2 downbeat (step 4): Mode color note
+    pattern[4] = Math.random() > 0.4 ? 2 : 4;
+
+    // Beat 3 downbeat (step 8): Fifth or octave
+    pattern[8] = Math.random() > 0.35 ? 4 : 7;
+
+    // Beat 4 downbeat (step 12): Resolution degree
+    pattern[12] = Math.random() > 0.4 ? 6 : 1;
+
+    // Syncopated passing steps
+    const syncopatedSteps = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15];
+    const fillProb = activeBiome === 'cyberpunk' ? 0.65 : activeBiome === 'glacial' ? 0.32 : 0.45;
+    for (const step of syncopatedSteps) {
+      if (Math.random() < fillProb) {
+        pattern[step] = Math.floor(Math.random() * (maxDegree + 1));
+      }
+    }
+
     this.melodyPattern = pattern;
   }
 
