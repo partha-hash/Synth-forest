@@ -535,11 +535,20 @@ export class AudioEngine {
     osc.frequency.setValueAtTime(safeFreq, now);
     osc2.frequency.setValueAtTime(safeFreq * ratios[mode], now);
     filter.type = mode === 2 ? 'lowpass' : mode === 4 ? 'bandpass' : 'lowpass';
-    filter.frequency.setValueAtTime(mode === 2 ? 420 : mode === 4 ? safeFreq * 2.8 : 2400, now);
-    filter.Q.setValueAtTime(mode === 4 ? 1.8 : 0.7, now);
+    filter.frequency.setValueAtTime(mode === 2 ? 420 : mode === 4 ? safeFreq * 2.8 : mode === 5 ? 5200 : 2400, now);
+    filter.Q.setValueAtTime(mode === 4 ? 1.8 : mode === 5 ? 4.5 : 0.7, now);
+    if (mode === 5) {
+      // Ghost Shelf: slow unstable pitch and a sweeping resonant cutoff.
+      osc.detune.setValueAtTime(-18, now);
+      osc.detune.linearRampToValueAtTime(34, now + 3.5);
+      osc.detune.linearRampToValueAtTime(-26, now + 7.5);
+      filter.frequency.setValueAtTime(5200, now);
+      filter.frequency.exponentialRampToValueAtTime(380, now + 6.5);
+      filter.frequency.linearRampToValueAtTime(2600, now + 10);
+    }
     amp.gain.setValueAtTime(0.0001, now);
-    amp.gain.linearRampToValueAtTime(mode === 2 ? 0.12 : 0.085, now + (mode === 5 ? 0.35 : 0.08));
-    amp.gain.setTargetAtTime(0.0001, now + (mode === 2 ? 0.7 : 1.1), mode === 5 ? 1.0 : 0.48);
+    amp.gain.linearRampToValueAtTime(mode === 5 ? 0.16 : mode === 2 ? 0.12 : 0.085, now + (mode === 5 ? 1.0 : mode === 2 ? 0.35 : 0.08));
+    amp.gain.setTargetAtTime(0.0001, now + (mode === 5 ? 3.0 : mode === 2 ? 0.7 : 1.1), mode === 5 ? 2.8 : mode === 2 ? 1.0 : 0.48);
     shimmer.gain.setValueAtTime(0.0001, now);
     shimmer.gain.linearRampToValueAtTime(mode === 3 ? 0.045 : 0.018, now + 0.3);
     shimmer.gain.setTargetAtTime(0.0001, now + 0.9, 0.8);
