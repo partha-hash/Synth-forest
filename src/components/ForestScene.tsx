@@ -1392,14 +1392,34 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       // In Living Ecosystem mode, each interaction becomes part of a connected soundscape:
       // nearby-sounding harmonics and subtle environmental textures respond to the object.
       if (ecosystemModeRef.current) {
-        const harmonic = prop.freq * (prop.type === 'tree' || prop.type === 'flower' ? 1.5 : 2);
-        window.setTimeout(() => {
-          if (ecosystemModeRef.current) audioEngine.triggerNaturePad(harmonic, prop.subtype ?? 1);
-        }, 110);
+        // Blissful ecosystem: a tree becomes the harmonic anchor for its nearby grove.
+        // The cluster uses consonant jazz colours (3rd, 5th, maj7, 9th) rather than
+        // independently random pitches, with gentle staggered pad attacks.
+        if (prop.type === 'tree' || prop.type === 'sapling') {
+          const nearby = interactiveProps
+            .filter((other) => other !== prop && other.group.position.distanceTo(prop.group.position) < 9)
+            .sort((a, b) => a.group.position.distanceTo(prop.group.position) - b.group.position.distanceTo(prop.group.position))
+            .slice(0, 4);
+          const chordRatios = [1.25, 1.5, 1.875, 2.25]; // maj/min 3rd, 5th, maj7, 9th
+          nearby.forEach((other, index) => {
+            const ratio = chordRatios[index % chordRatios.length];
+            const chordTone = prop.freq * ratio;
+            window.setTimeout(() => {
+              if (!ecosystemModeRef.current) return;
+              audioEngine.triggerNaturePad(chordTone, index % 5);
+              other.animTimer = Math.max(other.animTimer, 0.55);
+            }, 130 + index * 145);
+          });
+        } else {
+          const harmonic = prop.freq * (prop.type === 'flower' ? 1.5 : 1.25);
+          window.setTimeout(() => {
+            if (ecosystemModeRef.current) audioEngine.triggerNaturePad(harmonic, prop.subtype ?? 1);
+          }, 110);
+        }
         if (prop.type === 'bush' || prop.type === 'mushroom') {
           window.setTimeout(() => {
-            if (ecosystemModeRef.current) audioEngine.triggerBushNoiseImpact(0.22);
-          }, 220);
+            if (ecosystemModeRef.current) audioEngine.triggerBushNoiseImpact(0.16);
+          }, 260);
         }
       }
 
