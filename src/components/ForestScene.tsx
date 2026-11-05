@@ -852,32 +852,82 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       );
     }
 
-    // --- Edible forest fruits: each one triggers a psychedelic visual/audio bloom ---
+    // --- Edible low-poly fruit grove: varied silhouettes, not repeated generic spheres ---
     const fruitKinds = [
-      { name: 'Moon Apple', color: 0xd94b54, accent: 0xffb5a8, freq: 1.0 },
-      { name: 'Sun Pear', color: 0xa8c95a, accent: 0xe5f4a0, freq: 1.125 },
-      { name: 'Amber Orange', color: 0xf28a28, accent: 0xffd17a, freq: 1.25 },
-      { name: 'Dream Mango', color: 0xe9a52f, accent: 0xf36c50, freq: 1.5 },
-      { name: 'Star Acorn', color: 0x9a633c, accent: 0xd6ae76, freq: 0.75 },
-      { name: 'Glow Berry', color: 0x9362c9, accent: 0xd4b5ff, freq: 1.333 },
+      { name: 'Moon Apple', color: 0x278c28, accent: 0x9cff72, shape: 'apple', freq: 1.0 },
+      { name: 'Twin Cherries', color: 0x9f1025, accent: 0xff5268, shape: 'cherries', freq: 1.125 },
+      { name: 'Golden Pear', color: 0xb59a32, accent: 0xffe58a, shape: 'pear', freq: 1.25 },
+      { name: 'Ruby Apple', color: 0xb51e28, accent: 0xff7580, shape: 'apple', freq: 1.333 },
+      { name: 'Amber Orange', color: 0xe66b19, accent: 0xffc16b, shape: 'orange', freq: 1.5 },
+      { name: 'Dream Banana', color: 0xe5b52c, accent: 0xffef8a, shape: 'banana', freq: 0.875 },
+      { name: 'Dream Mango', color: 0xd98b27, accent: 0xffa45c, shape: 'mango', freq: 1.667 },
+      { name: 'Star Acorn', color: 0x8b542d, accent: 0xd6ae76, shape: 'acorn', freq: 0.75 },
+      { name: 'Moon Fig', color: 0x684071, accent: 0xc99add, shape: 'fig', freq: 1.2 },
+      { name: 'Mystic Grapes', color: 0x56316f, accent: 0xb88be8, shape: 'grapes', freq: 1.4 },
     ];
-    for (let i = 0; i < 30; i++) {
+    const makeFruitMesh = (kind: typeof fruitKinds[number], mat: THREE.MeshStandardMaterial) => {
+      const group = new THREE.Group();
+      const add = (geo: THREE.BufferGeometry, x: number, y: number, z: number, sx=1, sy=1, sz=1) => {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x,y,z); mesh.scale.set(sx,sy,sz); group.add(mesh); return mesh;
+      };
+      const stem = () => {
+        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.04,0.22,5), branchMat);
+        s.position.set(0,0.67,0); s.rotation.z=-0.16; group.add(s);
+      };
+      if (kind.shape === 'banana') {
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.68,0.42,0), new THREE.Vector3(-0.38,0.16,0),
+          new THREE.Vector3(0.05,0.10,0), new THREE.Vector3(0.48,0.22,0),
+          new THREE.Vector3(0.72,0.58,0)
+        ]);
+        add(new THREE.TubeGeometry(curve,18,0.16,7,false),0,0,0);
+        const tips = new THREE.Mesh(new THREE.ConeGeometry(0.055,0.16,5), branchMat);
+        tips.position.set(-0.68,0.42,0); tips.rotation.z=Math.PI/2; group.add(tips);
+        const tip2=tips.clone(); tip2.position.set(0.72,0.58,0); tip2.rotation.z=-0.5; group.add(tip2);
+      } else if (kind.shape === 'grapes') {
+        for (let j=0;j<9;j++) {
+          const angle=(j%3)*Math.PI*2/3 + (j>5?0.35:0);
+          const y=0.22+Math.floor(j/3)*0.19;
+          add(new THREE.IcosahedronGeometry(0.19,1),Math.cos(angle)*0.19,y,Math.sin(angle)*0.16,1,1,0.9);
+        }
+        stem();
+        const leaf = add(new THREE.SphereGeometry(0.16,6,5),0.13,0.77,0,1.5,0.3,0.8); leaf.rotation.z=-0.35;
+      } else if (kind.shape === 'cherries') {
+        add(new THREE.IcosahedronGeometry(0.25,1),-0.2,0.3,0,1,1,0.9);
+        add(new THREE.IcosahedronGeometry(0.25,1),0.22,0.3,0,1,1,0.9);
+        const curve1=new THREE.CatmullRomCurve3([new THREE.Vector3(-0.2,0.5,0),new THREE.Vector3(-0.18,0.85,0),new THREE.Vector3(0,0.98,0)]);
+        const curve2=new THREE.CatmullRomCurve3([new THREE.Vector3(0.22,0.5,0),new THREE.Vector3(0.18,0.83,0),new THREE.Vector3(0,0.98,0)]);
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(curve1,8,0.018,4,false),branchMat),new THREE.Mesh(new THREE.TubeGeometry(curve2,8,0.018,4,false),branchMat));
+      } else if (kind.shape === 'acorn') {
+        add(new THREE.SphereGeometry(0.32,8,6),0,0.31,0,0.9,1.15,0.9);
+        const cap=new THREE.Mesh(new THREE.ConeGeometry(0.36,0.22,8),branchMat); cap.position.y=0.64; group.add(cap);
+        stem();
+      } else {
+        const geo = kind.shape === 'pear' ? new THREE.SphereGeometry(0.4,9,7) : new THREE.IcosahedronGeometry(kind.shape==='orange'?0.39:0.42,1);
+        const fruit=add(geo,0,0.42,0,
+          kind.shape==='pear'?0.78:(kind.shape==='banana'?1:1),
+          kind.shape==='pear'?1.35:(kind.shape==='mango'?0.78:1.08),
+          kind.shape==='mango'?0.72:0.88);
+        if (kind.shape==='mango') fruit.rotation.z=0.48;
+        stem();
+        const leaf=add(new THREE.SphereGeometry(0.15,6,5),0.15,0.76,0,1.5,0.32,0.75); leaf.rotation.z=-0.4;
+      }
+      return group;
+    };
+    for (let i = 0; i < 40; i++) {
       const kind = fruitKinds[i % fruitKinds.length];
-      const fruitGroup = new THREE.Group();
-      const fruitMat = new THREE.MeshStandardMaterial({ color: kind.color, roughness: 0.3, metalness: 0.08, emissive: kind.accent, emissiveIntensity: 0.18 });
-      const fruitGeo = kind.name.includes('Pear') ? new THREE.SphereGeometry(0.48, 9, 7) : new THREE.IcosahedronGeometry(0.43, 1);
-      const fruit = new THREE.Mesh(fruitGeo, fruitMat);
-      fruit.scale.set(kind.name.includes('Pear') ? 0.82 : 1, kind.name.includes('Pear') ? 1.25 : 1.05, 0.88);
-      fruit.position.y = 0.48;
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.24, 5), branchMat);
-      stem.position.set(0, 0.91, 0); stem.rotation.z = -0.18;
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), saplingLeafMat);
-      leaf.scale.set(1.4, 0.35, 0.7); leaf.position.set(0.14, 0.96, 0);
-      fruitGroup.add(fruit, stem, leaf);
-      const pos = getScenicPosition(i + 120, 25, 2.8);
+      const fruitMat = new THREE.MeshStandardMaterial({
+        color: kind.color, roughness: 0.34, metalness: 0.04,
+        emissive: kind.accent, emissiveIntensity: 0.14, flatShading: true
+      });
+      const fruitGroup = makeFruitMesh(kind, fruitMat);
+      // Use a wider search radius and stricter clearance so every fruit remains individually visible.
+      const pos = getScenicPosition(i + 220, 32, 3.2);
       fruitGroup.position.set(pos.x, pos.y, pos.z);
+      fruitGroup.rotation.y = (i * 2.399) % (Math.PI * 2);
       const note = getModeNote(i + 11);
-      registerProp(fruitGroup, 'fruit', note.freq * kind.freq, note.noteName, `${kind.name} — eat me`, fruit, i % fruitKinds.length);
+      registerProp(fruitGroup, 'fruit', note.freq * kind.freq, note.noteName, `${kind.name} — eat me`, undefined, i % fruitKinds.length);
     }
 
     // --- C. Wood Stumps ---
