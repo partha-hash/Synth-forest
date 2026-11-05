@@ -915,19 +915,38 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       }
       return group;
     };
+    const placedFruitPositions: Array<{x:number; z:number; kind:number}> = [];
+    const treeAnchors = interactiveProps.filter((p) => p.type === 'tree').map((p) => p.group.position);
     for (let i = 0; i < 40; i++) {
-      const kind = fruitKinds[i % fruitKinds.length];
+      // Distribute fruit beneath existing tree canopies, never at the outer map edge.
+      const kindIndex = i % fruitKinds.length;
+      const kind = fruitKinds[kindIndex];
       const fruitMat = new THREE.MeshStandardMaterial({
         color: kind.color, roughness: 0.34, metalness: 0.04,
         emissive: kind.accent, emissiveIntensity: 0.14, flatShading: true
       });
       const fruitGroup = makeFruitMesh(kind, fruitMat);
-      // Use a wider search radius and stricter clearance so every fruit remains individually visible.
-      const pos = getScenicPosition(i + 220, 32, 3.2);
+      let pos = getScenicPosition(i + 220, 22, 4.0);
+      let bestScore = -Infinity;
+      for (let attempt = 0; attempt < 36; attempt++) {
+        const anchor = treeAnchors[(i * 7 + attempt * 3) % Math.max(1, treeAnchors.length)];
+        if (!anchor) break;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 2.4 + Math.random() * 3.2;
+        const x = anchor.x + Math.cos(angle) * radius;
+        const z = anchor.z + Math.sin(angle) * radius;
+        const candidate = {x, z, y:getLittlePlanetHeight(x,z)};
+        const nearest = placedFruitPositions.reduce((d,p)=>Math.min(d,Math.hypot(p.x-x,p.z-z)), 99);
+        const sameKind = placedFruitPositions.some(p=>p.kind===kindIndex && Math.hypot(p.x-x,p.z-z)<7.5);
+        const edgePenalty = Math.max(0, Math.hypot(x,z)-34);
+        const score = nearest - (sameKind ? 18 : 0) - edgePenalty * 3;
+        if (score > bestScore && !sameKind && Math.hypot(x,z) < 38) { bestScore=score; pos=candidate; }
+      }
+      placedFruitPositions.push({x:pos.x,z:pos.z,kind:kindIndex});
       fruitGroup.position.set(pos.x, pos.y, pos.z);
       fruitGroup.rotation.y = (i * 2.399) % (Math.PI * 2);
       const note = getModeNote(i + 11);
-      registerProp(fruitGroup, 'fruit', note.freq * kind.freq, note.noteName, `${kind.name} — eat me`, undefined, i % fruitKinds.length);
+      registerProp(fruitGroup, 'fruit', note.freq * kind.freq, note.noteName, `${kind.name} — eat me`, undefined, kindIndex);
     }
 
     // --- C. Wood Stumps ---
@@ -1447,9 +1466,34 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         case 'tree':
           audioEngine.triggerTreeTap(prop.freq, prop.subtype ?? 0);
           break;
-        case 'mushroom':
+        case 'mushroom': {
           audioEngine.triggerMushroomSound(prop.freq, prop.subtype ?? 0);
+          // The rare Ghost Shelf mushroom triggers a temporary low-cost tunnel-vision trip.
+          if ((prop.subtype ?? 0) === 5) {
+            const host = renderer.domElement.parentElement;
+            if (host) {
+              const trip = document.createElement('div');
+              trip.setAttribute('aria-hidden', 'true');
+              Object.assign(trip.style, {
+                position:'absolute', inset:'0', zIndex:'8', pointerEvents:'none',
+                background:'radial-gradient(ellipse at center, transparent 12%, rgba(5,2,18,.32) 38%, rgba(0,0,0,.9) 100%)',
+                backdropFilter:'blur(2px) saturate(1.8)', WebkitBackdropFilter:'blur(2px) saturate(1.8)',
+                mixBlendMode:'normal', opacity:'0', transition:'opacity 1.2s ease',
+                animation:'sf-mushroom-trip 9s ease-in-out forwards'
+              });
+              if (!document.getElementById('sf-mushroom-trip-style')) {
+                const style=document.createElement('style'); style.id='sf-mushroom-trip-style';
+                style.textContent='@keyframes sf-mushroom-trip{0%{opacity:0;backdrop-filter:blur(0) saturate(1)}15%{opacity:1;backdrop-filter:blur(3px) saturate(2.1)}65%{opacity:1;backdrop-filter:blur(5px) saturate(2.5)}100%{opacity:0;backdrop-filter:blur(0) saturate(1)}}';
+                document.head.appendChild(style);
+              }
+              host.appendChild(trip);
+              window.setTimeout(()=>trip.remove(), 9500);
+            }
+            if (bloomPass) bloomPass.strength = Math.min(2.2, initialTheme.bloomStrength + 0.9);
+            window.setTimeout(()=>{ if (bloomPass) bloomPass.strength = initialTheme.bloomStrength; }, 9000);
+          }
           break;
+        }
         case 'fruit':
           audioEngine.triggerPsychedelicFruit(prop.freq, prop.subtype ?? 0);
           prop.group.userData.eaten = true;
@@ -1665,6 +1709,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       const activeTheme = FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral;
       scene.background = new THREE.Color(activeTheme.fogColor);
       (scene.fog as THREE.FogExp2).color.set(activeTheme.fogColor);
+      // Cheap animated fog: gently breathe density rather than simulating costly particles.
+      (scene.fog as THREE.FogExp2).density = 0.018 + (Math.sin(elapsed * 0.11) * 0.0018) + (Math.sin(elapsed * 0.037 + 1.4) * 0.0012);
       ambientLight.color.set(activeTheme.ambientLightColor);
       hemiLight.color.set(activeTheme.keyLightColor);
       hemiLight.groundColor.set(activeTheme.fogColor);
