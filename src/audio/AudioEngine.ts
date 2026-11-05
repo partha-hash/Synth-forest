@@ -838,37 +838,23 @@ export class AudioEngine {
     const mode = MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
     const maxDegree = Math.min(mode.notes.length - 1, 7);
 
-    // Four-bar atmospheric bass phrase: only 2-3 sustained notes per cycle.
-    // Empty bars are intentional rests that leave room for the pads and ambience.
-    const colorDegree = Math.random() > 0.5 ? 2 : Math.min(3, maxDegree);
-    const fifthDegree = Math.min(4, maxDegree);
-    this.bassPattern = [0, Math.random() > 0.55 ? colorDegree : null, fifthDegree, Math.random() > 0.5 ? 1 : null];
+    // Warm, familiar four-bar harmony: root, colour, fifth, gentle turnaround.
+    const colour = Math.min(2, maxDegree);
+    this.bassPattern = [0, Math.random() > 0.28 ? colour : null, Math.min(4, maxDegree), Math.random() > 0.35 ? 1 : null];
     this.bassBarIndex = 0;
 
-    // 2. Generate 16 16th-note melody steps in 4/4 time
-    const pattern: (number | null)[] = new Array(16).fill(null);
-
-    // Beat 1 downbeat (step 0): Root or octave
-    pattern[0] = Math.random() > 0.3 ? 0 : 7;
-
-    // Beat 2 downbeat (step 4): Mode color note
-    pattern[4] = Math.random() > 0.4 ? 2 : 4;
-
-    // Beat 3 downbeat (step 8): Fifth or octave
-    pattern[8] = Math.random() > 0.35 ? 4 : 7;
-
-    // Beat 4 downbeat (step 12): Resolution degree
-    pattern[12] = Math.random() > 0.4 ? 6 : 1;
-
-    // Syncopated passing steps
-    const syncopatedSteps = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15];
-    const fillProb = activeBiome === 'cyberpunk' ? 0.65 : activeBiome === 'glacial' ? 0.32 : 0.45;
-    for (const step of syncopatedSteps) {
-      if (Math.random() < fillProb) {
-        pattern[step] = Math.floor(Math.random() * (maxDegree + 1));
-      }
-    }
-
+    // Four related, singable 1-bar motifs. Rests and repeated notes keep the
+    // phrase spacious; scale degrees are shared by every selected musical mode.
+    const motifs: (number | null)[][] = [
+      [0, null, 2, null, 4, null, 2, null, 1, null, 2, null, 0, null, null, null],
+      [0, null, 2, 4, null, 4, 2, null, 1, null, 2, null, 0, null, 1, null],
+      [4, null, 2, null, 0, null, 1, null, 2, null, 4, null, 2, null, 0, null],
+      [0, null, null, 2, 4, null, 5, null, 4, null, 2, null, 1, null, 0, null],
+    ];
+    const motif = motifs[Math.floor(Math.random() * motifs.length)];
+    const pattern = motif.map((degree) => degree === null ? null : Math.min(degree, maxDegree));
+    // Occasional gentle pickup, never a fully random note.
+    if (Math.random() < 0.35) pattern[15] = Math.min(1, maxDegree);
     this.melodyPattern = pattern;
   }
 
