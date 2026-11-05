@@ -33,7 +33,7 @@ interface ForestSceneProps {
   isEcosystemMode?: boolean;
   onThemeCycle?: (newTheme: ForestThemeKey) => void;
   onObjectPlayed?: (
-    type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower' | 'ground',
+    type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower' | 'fruit' | 'ground',
     label: string,
     freq: number,
     noteName: string
@@ -42,7 +42,7 @@ interface ForestSceneProps {
 
 interface InteractiveProp {
   group: THREE.Group;
-  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower';
+  type: 'tree' | 'stump' | 'log' | 'stone' | 'bush' | 'mushroom' | 'sapling' | 'mossStick' | 'flower' | 'fruit';
   originalScale: THREE.Vector3;
   animTimer: number;
   freq: number;
@@ -645,24 +645,30 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       { x: -2, z: 36 },
     ];
 
-    const getClusteredPosition = (index: number, maxRadius: number) => {
+    const getClusteredPosition = (index: number, maxRadius: number, minSpacing = 2.5) => {
       const grove = groveCenters[index % groveCenters.length];
-      const offsetRadius = Math.random() * maxRadius;
-      const angle = Math.random() * Math.PI * 2;
-      const x = grove.x + Math.cos(angle) * offsetRadius;
-      const z = grove.z + Math.sin(angle) * offsetRadius;
-      return { x, z, y: getLittlePlanetHeight(x, z) };
+      let chosen = { x: grove.x, z: grove.z, y: getLittlePlanetHeight(grove.x, grove.z) };
+      for (let attempt = 0; attempt < 48; attempt++) {
+        const radius = Math.random() * maxRadius;
+        const angle = Math.random() * Math.PI * 2;
+        const x = grove.x + Math.cos(angle) * radius;
+        const z = grove.z + Math.sin(angle) * radius;
+        chosen = { x, z, y: getLittlePlanetHeight(x, z) };
+        if (interactiveProps.every((p) => Math.hypot(p.group.position.x - x, p.group.position.z - z) >= minSpacing)) return chosen;
+      }
+      return chosen;
     };
 
     // New decorative assets avoid the animal habitat clearings and central pond.
-    const getScenicPosition = (index: number, maxRadius: number) => {
+    const getScenicPosition = (index: number, maxRadius: number, minSpacing = 2.6) => {
       for (let attempt = 0; attempt < 36; attempt++) {
         const candidate = getClusteredPosition(index + attempt * 3, maxRadius);
         const nearAnimal = forestAnimals.some((animal) =>
           Math.hypot(candidate.x - animal.anchorX, candidate.z - animal.anchorZ) < animal.zoneRadius + 3.5
         );
         const nearPond = Math.hypot(candidate.x, candidate.z) < 9.5;
-        if (!nearAnimal && !nearPond) return candidate;
+        const clearOfProps = interactiveProps.every((p) => Math.hypot(p.group.position.x - candidate.x, p.group.position.z - candidate.z) >= minSpacing);
+        if (!nearAnimal && !nearPond && clearOfProps) return candidate;
       }
       return getClusteredPosition(index, maxRadius + 8);
     };
@@ -699,7 +705,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       treeGroup.add(f1, f2, f3, topper);
 
-      const pos = getClusteredPosition(i, 20);
+      const pos = getClusteredPosition(i, 20, 6.2);
       treeGroup.position.set(pos.x, pos.y, pos.z);
       treeGroup.rotation.y = Math.random() * Math.PI * 2;
 
@@ -745,7 +751,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         group.add(leaf);
         if (j < 4) makeBranch(group, new THREE.Vector3(0, trunkHeight * 0.72, 0), new THREE.Vector3(o[0] * 0.72 * scale, crownY + o[1] * 0.65 * scale, o[2] * 0.72 * scale), 0.075 * scale);
       });
-      const pos = getScenicPosition(i + 71, 26);
+      const pos = getScenicPosition(i + 71, 26, 6.0);
       group.position.set(pos.x, pos.y, pos.z);
       group.rotation.y = Math.random() * Math.PI * 2;
       const note = getModeNote(i + 2);
@@ -769,7 +775,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         group.add(leaf);
         if (j % 3 === 0) makeBranch(group, new THREE.Vector3(0, 3.4 * scale, 0), leaf.position.clone().multiply(new THREE.Vector3(0.72, 0.82, 0.72)), 0.13 * scale);
       }
-      const pos = getScenicPosition(i + 83, 30);
+      const pos = getScenicPosition(i + 83, 30, 8.0);
       group.position.set(pos.x, pos.y, pos.z);
       const note = getModeNote(i + 5);
       registerProp(group, 'tree', note.freq * 0.75, note.noteName, `Elder Giant Canopy (${note.name})`, undefined, 3);
@@ -789,7 +795,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         [[0, 3.25, 0], [0.38, 3.85, 0.1]], [[0.38, 3.85, 0.1], [0.5, 4.35, 0.12]],
       ];
       branches.forEach((b) => makeBranch(group, new THREE.Vector3(b[0][0], b[0][1], b[0][2]).multiplyScalar(scale), new THREE.Vector3(b[1][0], b[1][1], b[1][2]).multiplyScalar(scale), 0.085 * scale));
-      const pos = getScenicPosition(i + 91, 24);
+      const pos = getScenicPosition(i + 91, 24, 5.5);
       group.position.set(pos.x, pos.y, pos.z);
       const note = getModeNote(i + 9);
       registerProp(group, 'tree', note.freq * 1.12, note.noteName, `Bare Branch Tree (${note.name})`, undefined, 2);
@@ -844,6 +850,34 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         cap,
         subtype
       );
+    }
+
+    // --- Edible forest fruits: each one triggers a psychedelic visual/audio bloom ---
+    const fruitKinds = [
+      { name: 'Moon Apple', color: 0xd94b54, accent: 0xffb5a8, freq: 1.0 },
+      { name: 'Sun Pear', color: 0xa8c95a, accent: 0xe5f4a0, freq: 1.125 },
+      { name: 'Amber Orange', color: 0xf28a28, accent: 0xffd17a, freq: 1.25 },
+      { name: 'Dream Mango', color: 0xe9a52f, accent: 0xf36c50, freq: 1.5 },
+      { name: 'Star Acorn', color: 0x9a633c, accent: 0xd6ae76, freq: 0.75 },
+      { name: 'Glow Berry', color: 0x9362c9, accent: 0xd4b5ff, freq: 1.333 },
+    ];
+    for (let i = 0; i < 30; i++) {
+      const kind = fruitKinds[i % fruitKinds.length];
+      const fruitGroup = new THREE.Group();
+      const fruitMat = new THREE.MeshStandardMaterial({ color: kind.color, roughness: 0.3, metalness: 0.08, emissive: kind.accent, emissiveIntensity: 0.18 });
+      const fruitGeo = kind.name.includes('Pear') ? new THREE.SphereGeometry(0.48, 9, 7) : new THREE.IcosahedronGeometry(0.43, 1);
+      const fruit = new THREE.Mesh(fruitGeo, fruitMat);
+      fruit.scale.set(kind.name.includes('Pear') ? 0.82 : 1, kind.name.includes('Pear') ? 1.25 : 1.05, 0.88);
+      fruit.position.y = 0.48;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.24, 5), branchMat);
+      stem.position.set(0, 0.91, 0); stem.rotation.z = -0.18;
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), saplingLeafMat);
+      leaf.scale.set(1.4, 0.35, 0.7); leaf.position.set(0.14, 0.96, 0);
+      fruitGroup.add(fruit, stem, leaf);
+      const pos = getScenicPosition(i + 120, 25, 2.8);
+      fruitGroup.position.set(pos.x, pos.y, pos.z);
+      const note = getModeNote(i + 11);
+      registerProp(fruitGroup, 'fruit', note.freq * kind.freq, note.noteName, `${kind.name} — eat me`, fruit, i % fruitKinds.length);
     }
 
     // --- C. Wood Stumps ---
@@ -1366,6 +1400,12 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         case 'mushroom':
           audioEngine.triggerMushroomSound(prop.freq, prop.subtype ?? 0);
           break;
+        case 'fruit':
+          audioEngine.triggerPsychedelicFruit(prop.freq, prop.subtype ?? 0);
+          prop.group.userData.eaten = true;
+          prop.group.visible = false;
+          window.setTimeout(() => { if (prop.group) prop.group.visible = true; }, 9000);
+          break;
         case 'stump':
           audioEngine.triggerWoodDrum(prop.freq);
           break;
@@ -1392,34 +1432,14 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       // In Living Ecosystem mode, each interaction becomes part of a connected soundscape:
       // nearby-sounding harmonics and subtle environmental textures respond to the object.
       if (ecosystemModeRef.current) {
-        // Blissful ecosystem: a tree becomes the harmonic anchor for its nearby grove.
-        // The cluster uses consonant jazz colours (3rd, 5th, maj7, 9th) rather than
-        // independently random pitches, with gentle staggered pad attacks.
-        if (prop.type === 'tree' || prop.type === 'sapling') {
-          const nearby = interactiveProps
-            .filter((other) => other !== prop && other.group.position.distanceTo(prop.group.position) < 9)
-            .sort((a, b) => a.group.position.distanceTo(prop.group.position) - b.group.position.distanceTo(prop.group.position))
-            .slice(0, 4);
-          const chordRatios = [1.25, 1.5, 1.875, 2.25]; // maj/min 3rd, 5th, maj7, 9th
-          nearby.forEach((other, index) => {
-            const ratio = chordRatios[index % chordRatios.length];
-            const chordTone = prop.freq * ratio;
-            window.setTimeout(() => {
-              if (!ecosystemModeRef.current) return;
-              audioEngine.triggerNaturePad(chordTone, index % 5);
-              other.animTimer = Math.max(other.animTimer, 0.55);
-            }, 130 + index * 145);
-          });
-        } else {
-          const harmonic = prop.freq * (prop.type === 'flower' ? 1.5 : 1.25);
-          window.setTimeout(() => {
-            if (ecosystemModeRef.current) audioEngine.triggerNaturePad(harmonic, prop.subtype ?? 1);
-          }, 110);
-        }
+        const harmonic = prop.freq * (prop.type === 'tree' || prop.type === 'flower' ? 1.5 : 2);
+        window.setTimeout(() => {
+          if (ecosystemModeRef.current) audioEngine.triggerNaturePad(harmonic, prop.subtype ?? 1);
+        }, 110);
         if (prop.type === 'bush' || prop.type === 'mushroom') {
           window.setTimeout(() => {
-            if (ecosystemModeRef.current) audioEngine.triggerBushNoiseImpact(0.16);
-          }, 260);
+            if (ecosystemModeRef.current) audioEngine.triggerBushNoiseImpact(0.22);
+          }, 220);
         }
       }
 
