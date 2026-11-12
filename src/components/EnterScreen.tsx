@@ -37,7 +37,7 @@ export const EnterScreen: React.FC<EnterScreenProps> = ({ onEnter, currentTheme 
 
         {/* Central Title */}
         <h1 className="text-3xl sm:text-4xl font-bold tracking-[0.16em] text-white uppercase mb-2">
-          REDOWAN&apos;S SYNTH FOREST
+          SYLVAN SYNTHARIUM
         </h1>
 
         <div className="text-xs font-mono tracking-[0.25em] text-[#c5d19a] uppercase mb-8">

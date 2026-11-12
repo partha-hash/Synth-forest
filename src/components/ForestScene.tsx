@@ -50,6 +50,8 @@ interface InteractiveProp {
   name: string;
   glowMesh?: THREE.Mesh;
   subtype?: number;
+  midiLight?: THREE.PointLight;
+  midiLightTimer?: number;
 }
 
 interface ShockwaveRing {
@@ -325,6 +327,8 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
         name,
         glowMesh,
         subtype,
+        midiLight: undefined,
+        midiLightTimer: 0,
       });
     };
 
@@ -1700,6 +1704,32 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
     const autoPropTriggers = new Map<InteractiveProp, number>();
     let lastAutoRandomizeTime = 0;
 
+    const handleMidiNote = (event: Event) => {
+      const detail = (event as CustomEvent<{ note: number; freq: number }>).detail;
+      if (!detail) return;
+      const pitchClass = ((detail.note % 12) + 12) % 12;
+      const candidates = interactiveProps
+        .filter((prop) => ['tree', 'mushroom', 'stone', 'flower', 'fruit', 'bush'].includes(prop.type))
+        .filter((prop) => {
+          const propMidi = Math.round(69 + 12 * Math.log2(prop.freq / 440));
+          return ((propMidi % 12) + 12) % 12 === pitchClass;
+        })
+        .sort((a, b) => a.group.position.distanceTo(camera.position) - b.group.position.distanceTo(camera.position));
+      const selected = candidates.length ? candidates.slice(0, 2) : interactiveProps.filter((p) => p.type === 'tree').slice(0, 2);
+      selected.forEach((prop, index) => {
+        prop.animTimer = Math.max(prop.animTimer, 0.5);
+        prop.midiLightTimer = 1.15;
+        if (!prop.midiLight) {
+          prop.midiLight = new THREE.PointLight((FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral).keyLightColor, 0, 5.5, 2);
+          prop.midiLight.position.set(0, prop.type === 'tree' ? 2.4 : 0.8, 0);
+          prop.group.add(prop.midiLight);
+        }
+        prop.midiLight.color.set((FOREST_THEMES[themeRef.current] || FOREST_THEMES.astral).keyLightColor);
+        prop.midiLight.intensity = index === 0 ? 3.2 : 2.1;
+      });
+    };
+    window.addEventListener('forest-midi-note', handleMidiNote);
+
     const renderLoop = () => {
       animFrameId = requestAnimationFrame(renderLoop);
       const delta = Math.min(clock.getDelta(), 0.1);
@@ -1770,7 +1800,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
         if (elapsed - lastAutoRandomizeTime > 24.0) {
           lastAutoRandomizeTime = elapsed;
-          audioEngine.randomizeBiomeMelody(themeRef.current);
+          audioEngine.randomizeBiomeMelody(themeRef.current, !audioEngine.isMidiPlaying);
         }
       }
 
@@ -1939,6 +1969,14 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
 
       // Animate Interactive Props
       for (const prop of interactiveProps) {
+        if (prop.midiLight && prop.midiLightTimer && prop.midiLightTimer > 0) {
+          prop.midiLightTimer = Math.max(0, prop.midiLightTimer - delta);
+          prop.midiLight.intensity = Math.max(0, prop.midiLight.intensity - delta * 2.8);
+          if (prop.midiLightTimer <= 0) {
+            prop.group.remove(prop.midiLight);
+            prop.midiLight = undefined;
+          }
+        }
         if (prop.animTimer > 0) {
           prop.animTimer = Math.max(0, prop.animTimer - delta * 3.4);
           const bounce = Math.sin(prop.animTimer * Math.PI) * 0.35;
@@ -1978,6 +2016,7 @@ export const ForestScene: React.FC<ForestSceneProps> = ({
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', onTouchEnd);
+      window.removeEventListener('forest-midi-note', handleMidiNote);
       window.removeEventListener('mousedown', onPointerDown);
       window.removeEventListener('mousemove', onPointerMove);
       window.removeEventListener('mouseup', onPointerUp);

@@ -29,6 +29,7 @@ import {
 } from '../types/synth';
 import { AudioVisualizer } from './AudioVisualizer';
 import { audioEngine } from '../audio/AudioEngine';
+import { MIDI_STYLES, MidiStyle, parseMidiFile } from '../audio/MidiPlayer';
 
 interface ControlDockProps {
   currentTheme: ForestThemeKey;
@@ -65,6 +66,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   const [activeBassNote, setActiveBassNote] = useState<string>('—');
   const [melodyPattern, setMelodyPattern] = useState<(number | null)[]>(audioEngine.getMelodyPattern());
   const [bassPattern, setBassPattern] = useState<(number | null)[]>(audioEngine.getBassPattern());
+  const [midiPlaying, setMidiPlaying] = useState(false);
+  const [midiStyle, setMidiStyle] = useState<MidiStyle>('ambient');
+  const [midiMessage, setMidiMessage] = useState('Chord-led melodies follow the selected mode.');
+  const midiInputRef = useRef<HTMLInputElement>(null);
 
   // Remembers when each sequencer step was last tapped (used for double-tap to clear)
   const lastStepTapRef = useRef<Record<number, number>>({});
@@ -75,6 +80,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   const currentMode: MusicalMode = MUSICAL_MODES[synthSettings.selectedMode] || MUSICAL_MODES.dorian;
 
   // Listen for melody step and bass events
+  useEffect(() => {
+    const stopMidi = () => setMidiPlaying(false);
+    window.addEventListener('forest-midi-stop', stopMidi);
+    return () => window.removeEventListener('forest-midi-stop', stopMidi);
+  }, []);
+
   useEffect(() => {
     audioEngine.onMelodyStep = (step, beat, noteName, _freq, bassNoteName) => {
       setActiveStep(step);
@@ -88,6 +99,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   }, []);
 
   const handleToggleMelody = () => {
+    audioEngine.stopMidiPlayback();
+    setMidiPlaying(false);
     const nextState = !synthSettings.isMelodyPlaying;
     onSettingsChange({ isMelodyPlaying: nextState });
     audioEngine.toggle44Melody(nextState);
@@ -125,7 +138,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className="w-2.5 h-2.5 rounded-full inline-block shadow-sm"
                 style={{ backgroundColor: theme.accentColor, boxShadow: `0 0 8px ${theme.accentColor}` }}
               />
-              <span className="font-mono text-emerald-100 tracking-wider">REDOWAN&apos;S SYNTH FOREST</span>
+              <span className="font-mono text-emerald-100 tracking-wider">SYLVAN SYNTHARIUM</span>
             </div>
 
             {/* Last Hit or Melody Status */}
@@ -322,6 +335,57 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             {/* TAB 1: MELODY SEQUENCER */}
             {activeTab === 'melody' && (
               <div className="space-y-3.5 text-xs">
+                {/* Chord-led MIDI roaming player */}
+                <div className="p-3 rounded-xl bg-[#10251b]/80 border border-teal-400/25 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-mono text-xs font-bold tracking-wider text-teal-100 uppercase">Forest MIDI player</div>
+                      <div className="text-[10px] text-teal-200/60 mt-0.5">Chord-based melodies • explore while it plays</div>
+                    </div>
+                    <span className={`px-2 py-1 rounded-full text-[9px] font-mono border ${midiPlaying ? 'text-teal-100 bg-teal-400/20 border-teal-300/40 animate-pulse' : 'text-emerald-300/60 bg-black/20 border-emerald-500/15'}`}>{midiPlaying ? 'MIDI PLAYING' : 'MIDI STOPPED'}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {MIDI_STYLES.map((style) => (
+                      <button key={style.id} onClick={() => setMidiStyle(style.id)} className={`rounded-lg border px-2 py-1.5 text-left transition-colors ${midiStyle === style.id ? 'bg-teal-400/20 border-teal-300/50 text-teal-100' : 'bg-black/20 border-teal-500/10 text-emerald-200/70 hover:border-teal-400/30'}`}>
+                        <div className="text-[10px] font-bold">{style.name}</div>
+                        <div className="text-[9px] opacity-60">{style.bpm} BPM</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => {
+                      audioEngine.stopMidiPlayback();
+                      audioEngine.toggle44Melody(false);
+                      onSettingsChange({ isMelodyPlaying: false });
+                      const phrase = audioEngine.playGeneratedMidi(midiStyle, currentMode);
+                      setMidiPlaying(true);
+                      setMidiMessage(`${phrase.events.length} notes • ${phrase.bpm} BPM • looping four-bar chord progression`);
+                    }} className="flex items-center gap-1.5 rounded-lg bg-teal-400 text-[#062019] px-3 py-1.5 font-bold hover:bg-teal-300 active:scale-95">
+                      <Play className="w-3.5 h-3.5" /> Play MIDI
+                    </button>
+                    <button onClick={() => { audioEngine.stopMidiPlayback(); setMidiPlaying(false); }} className="flex items-center gap-1.5 rounded-lg border border-teal-400/25 bg-black/20 px-3 py-1.5 text-teal-100">
+                      <Square className="w-3 h-3" /> Stop
+                    </button>
+                    <button onClick={() => midiInputRef.current?.click()} className="rounded-lg border border-emerald-500/25 bg-emerald-950/40 px-3 py-1.5 text-emerald-200">Load .mid file</button>
+                    <input ref={midiInputRef} type="file" accept=".mid,.midi,audio/midi,audio/x-midi" className="hidden" onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const events = parseMidiFile(await file.arrayBuffer());
+                        audioEngine.stopMidiPlayback();
+                        audioEngine.toggle44Melody(false);
+                        onSettingsChange({ isMelodyPlaying: false });
+                        audioEngine.playMidiEvents(events);
+                        setMidiPlaying(true);
+                        setMidiMessage(`${file.name} • ${events.length} notes loaded`);
+                      } catch (error) {
+                        setMidiMessage(error instanceof Error ? error.message : 'Could not read this MIDI file.');
+                      } finally { event.target.value = ''; }
+                    }} />
+                  </div>
+                  <div className="text-[9px] text-teal-100/55 font-mono">{midiMessage} · Notes awaken nearby trees and forest materials.</div>
+                </div>
+
                 {/* 16-Step Melody Matrix */}
                 <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/20 space-y-2.5">
                   <div className="flex items-center justify-between">
