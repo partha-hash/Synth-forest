@@ -5,9 +5,9 @@ export interface MidiNoteEvent {
   duration: number;
   note: number;
   velocity: number;
+  /** Original file tempo, used to preserve relative tempo when changing playback BPM. */
+  sourceBpm?: number;
 }
-
-export type ParsedMidiEvents = MidiNoteEvent[] & { bpm: number };
 
 export type MidiStyle = 'ambient' | 'arpeggio' | 'house' | 'broken' | 'cinematic' | 'shuffle' | 'jungle' | 'minimal';
 
@@ -92,7 +92,7 @@ function readVar(data: Uint8Array, state: { i: number }): number {
 }
 
 /** Small Standard MIDI File parser: note-on/off, running status, tempo meta events. */
-export function parseMidiFile(buffer: ArrayBuffer): ParsedMidiEvents {
+export function parseMidiFile(buffer: ArrayBuffer): MidiNoteEvent[] {
   const data = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const ascii = (i: number) => String.fromCharCode(data[i], data[i + 1], data[i + 2], data[i + 3]);
@@ -147,16 +147,15 @@ export function parseMidiFile(buffer: ArrayBuffer): ParsedMidiEvents {
       const start = queue?.shift();
       if (start) {
         const msPerTick = (tempo / 1000) / ppq;
-        result.push({ time: start.tick * msPerTick, duration: Math.max(70, (event.tick - start.tick) * msPerTick), note: event.note, velocity: start.velocity / 127 });
+        const sourceBpm = 60000000 / tempo;
+        result.push({ sourceBpm, time: start.tick * msPerTick, duration: Math.max(70, (event.tick - start.tick) * msPerTick), note: event.note, velocity: start.velocity / 127 });
       }
     }
   }
   for (const [key, queue] of opened) {
     const note = Number(key.split(':')[1]);
-    for (const start of queue) result.push({ time: start.tick * (tempo / 1000) / ppq, duration: 350, note, velocity: start.velocity / 127 });
+    for (const start of queue) result.push({ sourceBpm: 60000000 / tempo, time: start.tick * (tempo / 1000) / ppq, duration: 350, note, velocity: start.velocity / 127 });
   }
   if (!result.length) throw new Error('No playable notes were found in this MIDI file.');
-  const sorted = result.sort((a, b) => a.time - b.time) as ParsedMidiEvents;
-  sorted.bpm = Math.round(60000000 / tempo);
-  return sorted;
+  return result.sort((a, b) => a.time - b.time);
 }
