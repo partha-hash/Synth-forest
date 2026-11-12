@@ -138,7 +138,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className="w-2.5 h-2.5 rounded-full inline-block shadow-sm"
                 style={{ backgroundColor: theme.accentColor, boxShadow: `0 0 8px ${theme.accentColor}` }}
               />
-              <span className="font-mono text-emerald-100 tracking-wider">SYLVAN SYNTHARIUM</span>
+              <span className="font-mono text-emerald-100 tracking-wider">FOREST SYNTH BY REDOWAN</span>
             </div>
 
             {/* Last Hit or Melody Status */}
