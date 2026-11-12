@@ -8,6 +8,7 @@
  * - Dynamic Biome-driven DSP effects (Reverb, Delay, Resonance, Cutoff, Drive)
  */
 
+import { createChordMelody, MidiNoteEvent, MidiStyle } from './MidiPlayer';
 import {
   DEFAULT_SYNTH_SETTINGS,
   FOREST_THEMES,
@@ -61,6 +62,9 @@ export class AudioEngine {
   private melodyPattern: (number | null)[] = []; // 32 steps of mode notes
   private bassPattern: (number | null)[] = [0, null, 4, null]; // Four sustained notes/rests across a 4-bar phrase
   private bassBarIndex: number = 0;
+  private midiTimeouts: number[] = [];
+  private midiStopTimer: number | null = null;
+  public isMidiPlaying: boolean = false;
 
   // Callbacks
   public onNoteTriggered?: (type: string, noteName: string, freq: number) => void;
@@ -232,10 +236,11 @@ export class AudioEngine {
   }
 
   // --- Voice 1: Blissful Celestial Crystal Chime ---
-  public triggerChime(freq: number, velocity: number = 1.0) {
+  public triggerChime(freq: number, velocity: number = 1.0, decaySeconds: number = 2.5) {
     if (!this.ctx || !this.effectsBus) return;
     const now = this.ctx.currentTime;
     const vel = Math.max(0.1, Math.min(1.5, velocity));
+    const decay = Math.max(0.12, Math.min(2.8, decaySeconds));
 
     // Pure fundamental + micro-chorus detune + crystalline overtone + starry shimmer
     const osc1 = this.ctx.createOscillator();
@@ -266,19 +271,19 @@ export class AudioEngine {
     // Blissful soft velvet attack (0.012s) and long resonant decay (up to 2.6s)
     gain1.gain.setValueAtTime(0.001, now);
     gain1.gain.linearRampToValueAtTime(0.26 * vel, now + 0.012);
-    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + decay);
 
     gain2.gain.setValueAtTime(0.001, now);
     gain2.gain.linearRampToValueAtTime(0.13 * vel, now + 0.01);
-    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 2.1);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + decay * 0.84);
 
     gain3.gain.setValueAtTime(0.001, now);
     gain3.gain.linearRampToValueAtTime(0.08 * vel, now + 0.006);
-    gain3.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
+    gain3.gain.exponentialRampToValueAtTime(0.0001, now + decay * 0.6);
 
     gain4.gain.setValueAtTime(0.001, now);
     gain4.gain.linearRampToValueAtTime(0.035 * vel, now + 0.004);
-    gain4.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+    gain4.gain.exponentialRampToValueAtTime(0.0001, now + decay * 0.36);
 
     osc1.connect(gain1);
     osc2.connect(gain2);
@@ -957,6 +962,7 @@ export class AudioEngine {
     this.settings.isMelodyPlaying = shouldEnable;
 
     if (shouldEnable) {
+      this.stopMidiPlayback();
       if (this.melodyTimerId) window.clearInterval(this.melodyTimerId);
       // In 4/4 time: 1 beat = (60 / bpm) seconds.
       // 16th note step = (60 / bpm) / 4 * 1000 ms.
@@ -972,6 +978,62 @@ export class AudioEngine {
         this.melodyTimerId = null;
       }
     }
+  }
+
+  /** Start a generated chord-led phrase using the active mode and selected rhythmic style. */
+  public playGeneratedMidi(style: MidiStyle, mode?: MusicalMode, bpm?: number) {
+    const selected = mode || MUSICAL_MODES[this.settings.selectedMode] || MUSICAL_MODES.dorian;
+    const phrase = createChordMelody(selected, style, bpm);
+    this.playMidiEvents(phrase.events, true);
+    return phrase;
+  }
+
+  /** Play imported Standard MIDI note events through the forest's existing synth voices. */
+  public playMidiEvents(events: MidiNoteEvent[], loop: boolean = false) {
+    this.stopMidiPlayback();
+    this.toggle44Melody(false);
+    this.settings.isMelodyPlaying = false;
+    if (!this.ctx || !events.length) return;
+    this.isMidiPlaying = true;
+    this.scheduleMidiCycle(events, loop);
+  }
+
+  private scheduleMidiCycle(events: MidiNoteEvent[], loop: boolean) {
+    if (!this.isMidiPlaying) return;
+    const startAt = performance.now();
+    events.forEach((event, index) => {
+      const timer = window.setTimeout(() => {
+        if (!this.isMidiPlaying || !this.ctx) return;
+        const freq = 440 * Math.pow(2, (event.note - 69) / 12);
+        this.triggerChime(freq, Math.max(0.25, event.velocity), Math.min(1.8, Math.max(0.18, event.duration / 1000)));
+        const noteName = this.midiNoteName(event.note);
+        this.onNoteTriggered?.('midi', noteName, freq);
+        window.dispatchEvent(new CustomEvent('forest-midi-note', { detail: { note: event.note, noteName, freq, index } }));
+      }, Math.max(0, event.time - (performance.now() - startAt)));
+      this.midiTimeouts.push(timer);
+    });
+    const end = Math.max(...events.map((event) => event.time + event.duration), 0) + 120;
+    this.midiStopTimer = window.setTimeout(() => {
+      this.midiTimeouts = [];
+      this.midiStopTimer = null;
+      if (loop && this.isMidiPlaying) this.scheduleMidiCycle(events, true);
+      else this.stopMidiPlayback();
+    }, end);
+  }
+
+  public stopMidiPlayback() {
+    const wasPlaying = this.isMidiPlaying;
+    this.midiTimeouts.forEach((timer) => window.clearTimeout(timer));
+    this.midiTimeouts = [];
+    if (this.midiStopTimer !== null) window.clearTimeout(this.midiStopTimer);
+    this.midiStopTimer = null;
+    this.isMidiPlaying = false;
+    if (wasPlaying) window.dispatchEvent(new Event('forest-midi-stop'));
+  }
+
+  private midiNoteName(note: number): string {
+    const names = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    return `${names[((note % 12) + 12) % 12]}${Math.floor(note / 12) - 1}`;
   }
 
   private step44Melody() {
@@ -1011,10 +1073,10 @@ export class AudioEngine {
         this.triggerMushroomSound(freq, step % 4);
       }
 
-      this.onMelodyStep?.(step, beat, noteName, freq, currentBassNoteName, currentBassFreq);
+      this.onMelodyStep?.(step, beat, noteName, freq, currentBassNoteName, currentBassFreq, 1);
       this.onNoteTriggered?.('melody44', noteName, freq);
     } else {
-      this.onMelodyStep?.(step, beat, '—', 0, currentBassNoteName, currentBassFreq);
+      this.onMelodyStep?.(step, beat, '—', 0, currentBassNoteName, currentBassFreq, 1);
     }
 
     this.currentMelodyStep = (this.currentMelodyStep + 1) % 16;
@@ -1023,7 +1085,7 @@ export class AudioEngine {
   /**
    * Randomizes music melody and 4-note bassline according to the chosen biome
    */
-  public randomizeBiomeMelody(themeKey: ForestThemeKey) {
+  public randomizeBiomeMelody(themeKey: ForestThemeKey, playImmediately: boolean = true) {
     this.applyBiomeDsp(themeKey);
 
     let targetMode: ModeKey = 'dorian';
@@ -1031,27 +1093,27 @@ export class AudioEngine {
 
     switch (themeKey) {
       case 'astral':
-        targetMode = Math.random() > 0.5 ? 'lydian' : 'pentatonicMinor';
+        targetMode = (['lydian', 'pentatonicMinor', 'wholeTone'] as ModeKey[])[Math.floor(Math.random() * 3)];
         targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'abyssal':
-        targetMode = Math.random() > 0.5 ? 'phrygian' : 'locrian';
+        targetMode = (['phrygian', 'locrian', 'harmonicMinor'] as ModeKey[])[Math.floor(Math.random() * 3)];
         targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'solar':
-        targetMode = Math.random() > 0.5 ? 'mixolydian' : 'ionian';
+        targetMode = (['mixolydian', 'ionian', 'blues'] as ModeKey[])[Math.floor(Math.random() * 3)];
         targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'cyberpunk':
-        targetMode = 'dorian';
+        targetMode = (['dorian', 'blues', 'wholeTone'] as ModeKey[])[Math.floor(Math.random() * 3)];
         targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'glacial':
-        targetMode = Math.random() > 0.5 ? 'aeolian' : 'lydian';
+        targetMode = (['aeolian', 'lydian', 'harmonicMinor'] as ModeKey[])[Math.floor(Math.random() * 3)];
         targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
       case 'fungal':
-        targetMode = Math.random() > 0.5 ? 'akebono' : 'phrygian';
+        targetMode = (['akebono', 'phrygian', 'pentatonicMinor'] as ModeKey[])[Math.floor(Math.random() * 3)];
         targetBpm = 80 + Math.floor(Math.random() * 21);
         break;
     }
@@ -1060,12 +1122,8 @@ export class AudioEngine {
     this.settings.melodyBpm = targetBpm;
     this.generateNew44Pattern(themeKey);
 
-    // Auto-restart sequencer with new tempo and notes
-    if (!this.settings.isMelodyPlaying) {
-      this.toggle44Melody(true);
-    } else {
-      this.toggle44Melody(true);
-    }
+    // Roaming may prepare a fresh motif without starting the sequencer.
+    if (playImmediately) this.toggle44Melody(true);
   }
 
   /**
@@ -1074,6 +1132,7 @@ export class AudioEngine {
    * dampens delay feedback, and flushes reverb wetness so there is zero residual noise or hiss.
    */
   public masterStop() {
+    this.stopMidiPlayback();
     this.toggle44Melody(false);
     this.stopSubBass();
     this.settings.isPadEnabled = false;
