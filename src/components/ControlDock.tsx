@@ -44,7 +44,7 @@ interface ControlDockProps {
   lastPlayed?: { type: string; label: string; freq: number; noteName: string } | null;
 }
 
-type TabType = 'melody' | 'modes' | 'biomes' | 'synth' | 'guide';
+type TabType = 'melody' | 'biomes' | 'synth' | 'guide';
 
 export const ControlDock: React.FC<ControlDockProps> = ({
   currentTheme,
@@ -169,21 +169,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 shadow-[0_0_10px_rgba(52,211,153,0.15)]'
                     : 'text-emerald-400/60 hover:text-emerald-200 hover:bg-emerald-500/10'
                 }`}
-                title="Music Studio: generated melodies, step sequencer and MIDI files"
+                title="Musical modes, melody studio, step sequencer and MIDI files"
               >
                 <Music className="w-3.5 h-3.5" />
-                <span>Music</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('modes')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'modes'
-                    ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 shadow-[0_0_10px_rgba(52,211,153,0.15)]'
-                    : 'text-emerald-400/60 hover:text-emerald-200 hover:bg-emerald-500/10'
-                }`}
-                title="Musical Modes"
-              >
-                <Compass className="w-3.5 h-3.5" />
                 <span>Modes</span>
               </button>
               <button
@@ -253,7 +241,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               title="PANIC: instantly silence all audio"
             >
               <Square className="w-3 h-3 text-rose-400 fill-rose-400" />
-              <span className="hidden sm:inline text-[11px] font-bold">PANIC</span>
+              <span className="text-[10px] sm:text-[11px] font-bold tracking-wide">PANIC</span>
             </button>
 
             {/* Tap Tree Quick Button */}
@@ -337,6 +325,58 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             {/* TAB 1: MELODY SEQUENCER */}
             {activeTab === 'melody' && (
               <div className="space-y-3.5 text-xs">
+                {/* Musical mode selection and melody sequencing share one workspace */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-mono text-xs font-bold tracking-wider text-emerald-100 uppercase">Musical Mode</div>
+                    <span className="text-[10px] text-emerald-300/60">Sets the scale for the sequencer and generated melodies</span>
+                  </div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {(Object.keys(MUSICAL_MODES) as ModeKey[]).map((modeKey) => {
+                    const m = MUSICAL_MODES[modeKey];
+                    const isSelected = synthSettings.selectedMode === modeKey;
+                    return (
+                      <button
+                        key={modeKey}
+                        onClick={() => {
+                          onSettingsChange({ selectedMode: modeKey });
+                          audioEngine.generateNew44Pattern();
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_15px_rgba(52,211,153,0.2)]'
+                            : 'bg-emerald-950/20 border-emerald-500/15 hover:bg-emerald-950/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs text-emerald-100">{m.name}</span>
+                          {isSelected && (
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shadow-[0_0_6px_#34d399]"
+                              style={{ backgroundColor: theme.accentColor }}
+                            />
+                          )}
+                        </div>
+                        <div className="text-[10px] font-mono text-emerald-300/80 mb-1">{m.formula}</div>
+                        <p className="text-[11px] text-emerald-200/70 leading-snug mb-2">{m.mood}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {m.noteNames.slice(0, 6).map((n) => (
+                            <span
+                              key={n}
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#020d08]/80 text-emerald-300 border border-emerald-500/15"
+                            >
+                              {n}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+                </div>
                 {/* Chord-led MIDI roaming player */}
                 <div className="p-3 rounded-xl bg-[#10251b]/80 border border-teal-400/25 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
@@ -603,51 +643,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                         className="w-20 accent-emerald-400 cursor-pointer"
                       />
                       <span className="font-mono text-emerald-300 w-8 text-right font-bold text-xs">
-                        {synthSettings.melodyBpm}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 bg-emerald-950/25 p-2.5 rounded-xl border border-emerald-500/15">
-                    <div className="flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-emerald-400" />
-                      <div>
-                        <div className="font-medium text-emerald-100">Sub Drone</div>
-                        <div className="text-[10px] text-emerald-400/60 font-mono">
-                          {synthSettings.isPadEnabled ? 'Active' : 'Silent (Standby)'}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleTogglePad}
-                      className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
-                        synthSettings.isPadEnabled
-                          ? 'bg-emerald-400 text-emerald-950 shadow-[0_0_12px_rgba(52,211,153,0.4)]'
-                          : 'bg-emerald-900/40 text-emerald-300 hover:bg-emerald-800/40 border border-emerald-500/25'
-                      }`}
-                    >
-                      {synthSettings.isPadEnabled ? 'ACTIVE' : 'STANDBY'}
-                    </button>
-                  </div>
-
-                  <div className={`flex items-center justify-between gap-3 bg-emerald-950/25 p-2.5 rounded-xl border border-emerald-500/15 transition-opacity ${synthSettings.isPadEnabled ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-emerald-400" />
-                      <div>
-                        <div className="font-medium text-emerald-100">Drone Volume</div>
-                        <div className="text-[10px] text-emerald-400/60 font-mono">
-                          {synthSettings.isPadEnabled ? 'Pad Output' : 'Muted'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={synthSettings.padVolume}
-                        onChange={(e) => onSettingsChange({ padVolume: Number(e.target.value) })}
+                 Number(e.target.value) })}
                         className="w-20 accent-emerald-400 cursor-pointer"
                       />
                       <span className="font-mono text-emerald-300 w-8 text-right font-bold text-xs">
@@ -655,54 +651,6 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       </span>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: MUSICAL MODES */}
-            {activeTab === 'modes' && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {(Object.keys(MUSICAL_MODES) as ModeKey[]).map((modeKey) => {
-                    const m = MUSICAL_MODES[modeKey];
-                    const isSelected = synthSettings.selectedMode === modeKey;
-                    return (
-                      <button
-                        key={modeKey}
-                        onClick={() => {
-                          onSettingsChange({ selectedMode: modeKey });
-                          audioEngine.generateNew44Pattern();
-                        }}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_15px_rgba(52,211,153,0.2)]'
-                            : 'bg-emerald-950/20 border-emerald-500/15 hover:bg-emerald-950/40'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs text-emerald-100">{m.name}</span>
-                          {isSelected && (
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shadow-[0_0_6px_#34d399]"
-                              style={{ backgroundColor: theme.accentColor }}
-                            />
-                          )}
-                        </div>
-                        <div className="text-[10px] font-mono text-emerald-300/80 mb-1">{m.formula}</div>
-                        <p className="text-[11px] text-emerald-200/70 leading-snug mb-2">{m.mood}</p>
-                        <div className="flex flex-wrap gap-1">
-                          {m.noteNames.slice(0, 6).map((n) => (
-                            <span
-                              key={n}
-                              className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#020d08]/80 text-emerald-300 border border-emerald-500/15"
-                            >
-                              {n}
-                            </span>
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             )}
