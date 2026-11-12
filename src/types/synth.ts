@@ -231,7 +231,7 @@ export const THEME_KEYS_ORDER: ForestThemeKey[] = [
   'fungal',
 ];
 
-// Fixed selectable musical modes (Diatonic Greek Modes + Pentatonic + Japanese Akebono)
+// Selectable modal, pentatonic, blues and symmetrical scales.
 export type ModeKey =
   | 'ionian'
   | 'dorian'
@@ -241,7 +241,10 @@ export type ModeKey =
   | 'aeolian'
   | 'locrian'
   | 'akebono'
-  | 'pentatonicMinor';
+  | 'pentatonicMinor'
+  | 'harmonicMinor'
+  | 'wholeTone'
+  | 'blues';
 
 export interface MusicalMode {
   id: ModeKey;
@@ -334,6 +337,33 @@ export const MUSICAL_MODES: Record<ModeKey, MusicalMode> = {
     formula: '1 - b3 - 4 - 5 - b7',
     notes: [110, 130.81, 146.83, 164.81, 196.0, 220.0, 261.63, 293.66, 329.63, 392.0, 440.0],
     noteNames: ['A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4'],
+  },
+  harmonicMinor: {
+    id: 'harmonicMinor',
+    name: 'Harmonic Minor',
+    greekName: 'Aeolian with raised seventh',
+    mood: 'Dramatic, mysterious and cinematic',
+    formula: '1 - 2 - b3 - 4 - 5 - b6 - 7',
+    notes: [110, 123.47, 130.81, 146.83, 164.81, 174.61, 207.65, 220, 246.94, 261.63, 293.66, 329.63],
+    noteNames: ['A2', 'B2', 'C3', 'D3', 'E3', 'F3', 'G#3', 'A3', 'B3', 'C4', 'D4', 'E4'],
+  },
+  wholeTone: {
+    id: 'wholeTone',
+    name: 'Whole Tone',
+    greekName: 'Six-note symmetrical scale',
+    mood: 'Floating, surreal and weightless',
+    formula: '1 - 2 - 3 - #4 - #5 - b7',
+    notes: [130.81, 146.83, 164.81, 185, 207.65, 233.08, 261.63, 293.66, 329.63, 370, 415.3, 466.16],
+    noteNames: ['C3', 'D3', 'E3', 'F#3', 'G#3', 'A#3', 'C4', 'D4', 'E4', 'F#4', 'G#4', 'A#4'],
+  },
+  blues: {
+    id: 'blues',
+    name: 'Blues Scale',
+    greekName: 'Minor blues hexatonic',
+    mood: 'Earthy, expressive and playful',
+    formula: '1 - b3 - 4 - b5 - 5 - b7',
+    notes: [130.81, 155.56, 174.61, 185, 196, 233.08, 261.63, 311.13, 349.23, 370, 392],
+    noteNames: ['C3', 'Eb3', 'F3', 'F#3', 'G3', 'Bb3', 'C4', 'Eb4', 'F4', 'F#4', 'G4'],
   },
 };
 
