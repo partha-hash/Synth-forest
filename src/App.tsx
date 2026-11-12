@@ -180,7 +180,7 @@ export default function App() {
             style={{ backgroundColor: activeThemeObj.accentColor, boxShadow: `0 0 10px ${activeThemeObj.accentColor}` }}
           />
           <span className="text-xs font-mono font-bold tracking-wider text-emerald-100">
-            SYLVAN SYNTHARIUM
+            FOREST SYNTH BY REDOWAN
           </span>
           <span className="text-[11px] font-mono text-emerald-300/80 border-l border-emerald-500/20 pl-2.5">
             {activeThemeObj.name}
