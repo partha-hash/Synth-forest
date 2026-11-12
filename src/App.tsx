@@ -70,10 +70,12 @@ export default function App() {
     setIsAutoExploring((prev) => {
       const next = !prev;
       if (next) {
-        audioEngine.randomizeBiomeMelody(currentTheme);
+        const midiHasPriority = audioEngine.isMidiPlaying;
+        if (midiHasPriority) audioEngine.toggle44Melody(false);
+        audioEngine.randomizeBiomeMelody(currentTheme, !midiHasPriority);
         setSynthSettings((s) => ({
           ...s,
-          isMelodyPlaying: true,
+          isMelodyPlaying: !midiHasPriority,
           selectedMode: audioEngine.getSettings().selectedMode,
           melodyBpm: audioEngine.getSettings().melodyBpm,
         }));
@@ -178,7 +180,7 @@ export default function App() {
             style={{ backgroundColor: activeThemeObj.accentColor, boxShadow: `0 0 10px ${activeThemeObj.accentColor}` }}
           />
           <span className="text-xs font-mono font-bold tracking-wider text-emerald-100">
-            REDOWAN&apos;S SYNTH FOREST
+            SYLVAN SYNTHARIUM
           </span>
           <span className="text-[11px] font-mono text-emerald-300/80 border-l border-emerald-500/20 pl-2.5">
             {activeThemeObj.name}
