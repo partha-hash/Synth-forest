@@ -262,27 +262,27 @@ export class AudioEngine {
 
     // Crystalline bell harmonic (2.76x)
     osc3.type = 'sine';
-    osc3.frequency.setValueAtTime(freq * 2.76, now);
+    osc3.frequency.setValueAtTime(freq * 2.0, now);
 
     // High celestial glass sparkle (4.0x)
     osc4.type = 'sine';
-    osc4.frequency.setValueAtTime(freq * 4.0, now);
+    osc4.frequency.setValueAtTime(freq * 3.01, now);
 
     // Blissful soft velvet attack (0.012s) and long resonant decay (up to 2.6s)
     gain1.gain.setValueAtTime(0.001, now);
-    gain1.gain.linearRampToValueAtTime(0.26 * vel, now + 0.012);
+    gain1.gain.linearRampToValueAtTime(0.22 * vel, now + 0.045);
     gain1.gain.exponentialRampToValueAtTime(0.0001, now + decay);
 
     gain2.gain.setValueAtTime(0.001, now);
-    gain2.gain.linearRampToValueAtTime(0.13 * vel, now + 0.01);
+    gain2.gain.linearRampToValueAtTime(0.10 * vel, now + 0.06);
     gain2.gain.exponentialRampToValueAtTime(0.0001, now + decay * 0.84);
 
     gain3.gain.setValueAtTime(0.001, now);
-    gain3.gain.linearRampToValueAtTime(0.08 * vel, now + 0.006);
+    gain3.gain.linearRampToValueAtTime(0.035 * vel, now + 0.09);
     gain3.gain.exponentialRampToValueAtTime(0.0001, now + decay * 0.6);
 
     gain4.gain.setValueAtTime(0.001, now);
-    gain4.gain.linearRampToValueAtTime(0.035 * vel, now + 0.004);
+    gain4.gain.linearRampToValueAtTime(0.012 * vel, now + 0.11);
     gain4.gain.exponentialRampToValueAtTime(0.0001, now + decay * 0.36);
 
     osc1.connect(gain1);
@@ -300,10 +300,10 @@ export class AudioEngine {
     osc3.start(now);
     osc4.start(now);
 
-    osc1.stop(now + 2.6);
-    osc2.stop(now + 2.2);
-    osc3.stop(now + 1.6);
-    osc4.stop(now + 1.0);
+    osc1.stop(now + decay + 0.06);
+    osc2.stop(now + decay * 0.9 + 0.06);
+    osc3.stop(now + decay * 0.72 + 0.06);
+    osc4.stop(now + decay * 0.55 + 0.06);
     // Note: Chimes do NOT trigger sub-bass to ensure absolute drone silence when pad is disabled
   }
 
@@ -989,13 +989,15 @@ export class AudioEngine {
   }
 
   /** Play imported Standard MIDI note events through the forest's existing synth voices. */
-  public playMidiEvents(events: MidiNoteEvent[], loop: boolean = false) {
+  public playMidiEvents(events: MidiNoteEvent[], loop: boolean = false, timeScale: number = 1) {
     this.stopMidiPlayback();
     this.toggle44Melody(false);
     this.settings.isMelodyPlaying = false;
     if (!this.ctx || !events.length) return;
     this.isMidiPlaying = true;
-    this.scheduleMidiCycle(events, loop);
+    const safeScale = Math.max(0.25, Math.min(3, Number.isFinite(timeScale) ? timeScale : 1));
+    const scaledEvents = events.map((event) => ({ ...event, time: event.time * safeScale, duration: event.duration * safeScale }));
+    this.scheduleMidiCycle(scaledEvents, loop);
   }
 
   private scheduleMidiCycle(events: MidiNoteEvent[], loop: boolean) {
@@ -1005,7 +1007,7 @@ export class AudioEngine {
       const timer = window.setTimeout(() => {
         if (!this.isMidiPlaying || !this.ctx) return;
         const freq = 440 * Math.pow(2, (event.note - 69) / 12);
-        this.triggerChime(freq, Math.max(0.25, event.velocity), Math.min(1.8, Math.max(0.18, event.duration / 1000)));
+        this.triggerChime(freq, Math.max(0.25, event.velocity), Math.min(2.8, Math.max(0.25, event.duration / 1000)));
         const noteName = this.midiNoteName(event.note);
         this.onNoteTriggered?.('midi', noteName, freq);
         window.dispatchEvent(new CustomEvent('forest-midi-note', { detail: { note: event.note, noteName, freq, index } }));
@@ -1127,7 +1129,7 @@ export class AudioEngine {
   }
 
   /**
-   * MASTER STOP: When master stop is applied, ALL sound must stop immediately!
+   * PANIC: When panic is applied, ALL sound must stop immediately!
    * Stops melody sequencer, kills continuous pad/sub-bass drone, silences wind noise,
    * dampens delay feedback, and flushes reverb wetness so there is zero residual noise or hiss.
    */
@@ -1140,6 +1142,17 @@ export class AudioEngine {
 
     if (this.ctx) {
       const now = this.ctx.currentTime;
+      // Hard-cut the complete output bus so every active voice and effect tail is silenced.
+      if (this.masterGain) {
+        this.masterGain.gain.cancelScheduledValues(now);
+        this.masterGain.gain.setValueAtTime(0, now);
+        window.setTimeout(() => {
+          if (this.masterGain && this.ctx) {
+            this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+            this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.settings.masterVolume / 100, this.ctx.currentTime);
+          }
+        }, 90);
+      }
       // Silence ambient wind completely
       if (this.windGain) {
         this.windGain.gain.cancelScheduledValues(now);

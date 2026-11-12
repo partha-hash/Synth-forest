@@ -7,6 +7,8 @@ export interface MidiNoteEvent {
   velocity: number;
 }
 
+export type ParsedMidiEvents = MidiNoteEvent[] & { bpm: number };
+
 export type MidiStyle = 'ambient' | 'arpeggio' | 'house' | 'broken' | 'cinematic' | 'shuffle' | 'jungle' | 'minimal';
 
 export const MIDI_STYLES: { id: MidiStyle; name: string; detail: string; bpm: number }[] = [
@@ -90,7 +92,7 @@ function readVar(data: Uint8Array, state: { i: number }): number {
 }
 
 /** Small Standard MIDI File parser: note-on/off, running status, tempo meta events. */
-export function parseMidiFile(buffer: ArrayBuffer): MidiNoteEvent[] {
+export function parseMidiFile(buffer: ArrayBuffer): ParsedMidiEvents {
   const data = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const ascii = (i: number) => String.fromCharCode(data[i], data[i + 1], data[i + 2], data[i + 3]);
@@ -154,5 +156,7 @@ export function parseMidiFile(buffer: ArrayBuffer): MidiNoteEvent[] {
     for (const start of queue) result.push({ time: start.tick * (tempo / 1000) / ppq, duration: 350, note, velocity: start.velocity / 127 });
   }
   if (!result.length) throw new Error('No playable notes were found in this MIDI file.');
-  return result.sort((a, b) => a.time - b.time);
+  const sorted = result.sort((a, b) => a.time - b.time) as ParsedMidiEvents;
+  sorted.bpm = Math.round(60000000 / tempo);
+  return sorted;
 }
