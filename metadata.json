@@ -1,6 +1,6 @@
 {
-  "name": "Sylvan Syntharium",
-  "description": "A living forest of sound, harmony and discovery.",
+  "name": "Forest Synth by Redowan",
+  "description": "An interactive musical forest by Redowan, with MIDI melodies, chord-based exploration and a playable sequencer.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
