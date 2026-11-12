@@ -67,9 +67,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   const [melodyPattern, setMelodyPattern] = useState<(number | null)[]>(audioEngine.getMelodyPattern());
   const [bassPattern, setBassPattern] = useState<(number | null)[]>(audioEngine.getBassPattern());
   const [midiPlaying, setMidiPlaying] = useState(false);
-  const [midiStyle, setMidiStyle] = useState<MidiStyle>('cinematic');
-  const [midiBpm, setMidiBpm] = useState(82);
-  const [loadedMidiEvents, setLoadedMidiEvents] = useState<ReturnType<typeof parseMidiFile> | null>(null);
+  const [midiStyle, setMidiStyle] = useState<MidiStyle>('ambient');
+  const [midiBpm, setMidiBpm] = useState<number>(76);
   const [midiMessage, setMidiMessage] = useState('Chord-led melodies follow the selected mode.');
   const midiInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,10 +168,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 shadow-[0_0_10px_rgba(52,211,153,0.15)]'
                     : 'text-emerald-400/60 hover:text-emerald-200 hover:bg-emerald-500/10'
                 }`}
-                title="Musical modes, melody studio, step sequencer and MIDI files"
+                title="Algorithmic Melody Matrix"
               >
                 <Music className="w-3.5 h-3.5" />
-                <span>Modes</span>
+                <span>Melody</span>
               </button>
               <button
                 onClick={() => setActiveTab('biomes')}
@@ -238,10 +237,11 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             <button
               onClick={onMasterStop}
               className="px-2 py-1 rounded-xl border border-rose-500/40 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 text-xs font-mono transition-all flex items-center gap-1 cursor-pointer shadow-sm active:scale-95"
-              title="PANIC: instantly silence all audio"
+              title="PANIC: Immediately silence all audio"
+              aria-label="Panic: immediately silence all audio"
             >
               <Square className="w-3 h-3 text-rose-400 fill-rose-400" />
-              <span className="text-[10px] sm:text-[11px] font-bold tracking-wide">PANIC</span>
+              <span className="text-[11px] font-bold">PANIC</span>
             </button>
 
             {/* Tap Tree Quick Button */}
@@ -325,64 +325,51 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             {/* TAB 1: MELODY SEQUENCER */}
             {activeTab === 'melody' && (
               <div className="space-y-3.5 text-xs">
-                {/* Musical mode selection and melody sequencing share one workspace */}
-                <div className="space-y-2.5">
+                {/* Musical mode and melody studio share one workspace */}
+                <section className="rounded-xl border border-emerald-500/20 bg-[#071a11]/80 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-mono text-xs font-bold tracking-wider text-emerald-100 uppercase">Musical Mode</div>
-                    <span className="text-[10px] text-emerald-300/60">Sets the scale for the sequencer and generated melodies</span>
+                    <div>
+                      <div className="font-mono text-xs font-bold tracking-wider text-emerald-100 uppercase">Mode & Melody Studio</div>
+                      <div className="text-[10px] text-emerald-200/60">Choose a scale, then build or generate a sequence in that mode</div>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-300">{currentMode.name}</span>
                   </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {(Object.keys(MUSICAL_MODES) as ModeKey[]).map((modeKey) => {
-                    const m = MUSICAL_MODES[modeKey];
-                    const isSelected = synthSettings.selectedMode === modeKey;
-                    return (
-                      <button
-                        key={modeKey}
-                        onClick={() => {
-                          onSettingsChange({ selectedMode: modeKey });
-                          audioEngine.generateNew44Pattern();
-                        }}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_15px_rgba(52,211,153,0.2)]'
-                            : 'bg-emerald-950/20 border-emerald-500/15 hover:bg-emerald-950/40'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs text-emerald-100">{m.name}</span>
-                          {isSelected && (
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shadow-[0_0_6px_#34d399]"
-                              style={{ backgroundColor: theme.accentColor }}
-                            />
-                          )}
-                        </div>
-                        <div className="text-[10px] font-mono text-emerald-300/80 mb-1">{m.formula}</div>
-                        <p className="text-[11px] text-emerald-200/70 leading-snug mb-2">{m.mood}</p>
-                        <div className="flex flex-wrap gap-1">
-                          {m.noteNames.slice(0, 6).map((n) => (
-                            <span
-                              key={n}
-                              className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#020d08]/80 text-emerald-300 border border-emerald-500/15"
-                            >
-                              {n}
-                            </span>
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                    {(Object.keys(MUSICAL_MODES) as ModeKey[]).map((modeKey) => {
+                      const mode = MUSICAL_MODES[modeKey];
+                      const selected = synthSettings.selectedMode === modeKey;
+                      return (
+                        <button
+                          key={modeKey}
+                          type="button"
+                          onClick={() => {
+                            onSettingsChange({ selectedMode: modeKey });
+                            audioEngine.generateNew44Pattern(currentTheme);
+                            setMelodyPattern(audioEngine.getMelodyPattern());
+                            setBassPattern(audioEngine.getBassPattern());
+                          }}
+                          aria-pressed={selected}
+                          title={`${mode.name}: ${mode.mood}`}
+                          className={`shrink-0 rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                            selected
+                              ? 'bg-emerald-400/20 border-emerald-300/60 text-white'
+                              : 'bg-black/20 border-emerald-500/15 text-emerald-200/70 hover:border-emerald-400/40'
+                          }`}
+                        >
+                          <span className="block text-[10px] font-bold whitespace-nowrap">{mode.name}</span>
+                          <span className="block text-[9px] opacity-60 whitespace-nowrap">{mode.noteNames.slice(0, 5).join(' · ')}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
 
-                </div>
                 {/* Chord-led MIDI roaming player */}
                 <div className="p-3 rounded-xl bg-[#10251b]/80 border border-teal-400/25 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <div className="font-mono text-xs font-bold tracking-wider text-teal-100 uppercase">Melody Studio</div>
-                      <div className="text-[10px] text-teal-200/60 mt-0.5">Generated melodies, step sequencing & imported MIDI in one workspace</div>
+                      <div className="font-mono text-xs font-bold tracking-wider text-teal-100 uppercase">Forest MIDI player</div>
+                      <div className="text-[10px] text-teal-200/60 mt-0.5">Chord-based melodies • explore while it plays</div>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-[9px] font-mono border ${midiPlaying ? 'text-teal-100 bg-teal-400/20 border-teal-300/40 animate-pulse' : 'text-emerald-300/60 bg-black/20 border-emerald-500/15'}`}>{midiPlaying ? 'MIDI PLAYING' : 'MIDI STOPPED'}</span>
                   </div>
@@ -390,22 +377,23 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     {MIDI_STYLES.map((style) => (
                       <button key={style.id} onClick={() => { setMidiStyle(style.id); setMidiBpm(style.bpm); }} className={`rounded-lg border px-2 py-1.5 text-left transition-colors ${midiStyle === style.id ? 'bg-teal-400/20 border-teal-300/50 text-teal-100' : 'bg-black/20 border-teal-500/10 text-emerald-200/70 hover:border-teal-400/30'}`}>
                         <div className="text-[10px] font-bold">{style.name}</div>
-                        <div className="text-[9px] opacity-60">{style.bpm} BPM · {style.detail}</div>
+                        <div className="text-[9px] opacity-60">{style.bpm} BPM</div>
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-3 rounded-lg border border-teal-500/15 bg-black/20 px-3 py-2">
-                    <Gauge className="w-4 h-4 text-teal-300" />
-                    <span className="text-[10px] font-mono text-teal-100/80">PLAYBACK BPM</span>
-                    <input aria-label="MIDI playback BPM" type="range" min="55" max="180" value={midiBpm} onChange={(e) => {
-                      const nextBpm = Number(e.target.value);
-                      setMidiBpm(nextBpm);
-                      if (loadedMidiEvents && midiPlaying) {
-                        audioEngine.playMidiEvents(loadedMidiEvents, false, loadedMidiEvents.bpm / nextBpm);
-                        setMidiMessage(`Imported MIDI • playback adjusted to ${nextBpm} BPM setting`);
-                      }
-                    }} className="flex-1 accent-teal-300" />
-                    <span className="w-12 text-right font-mono text-xs font-bold text-teal-200">{midiBpm}</span>
+                  <div className="flex items-center gap-3 rounded-lg border border-teal-400/15 bg-black/20 px-3 py-2">
+                    <label htmlFor="forest-midi-bpm" className="shrink-0 text-[10px] font-mono text-teal-100/80">PLAYBACK BPM</label>
+                    <input
+                      id="forest-midi-bpm"
+                      type="range"
+                      min="55"
+                      max="180"
+                      step="1"
+                      value={midiBpm}
+                      onChange={(event) => setMidiBpm(Number(event.target.value))}
+                      className="min-w-0 flex-1 accent-teal-300"
+                    />
+                    <span className="w-9 text-right text-xs font-mono font-bold text-teal-100">{midiBpm}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button onClick={() => {
@@ -414,10 +402,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       onSettingsChange({ isMelodyPlaying: false });
                       const phrase = audioEngine.playGeneratedMidi(midiStyle, currentMode, midiBpm);
                       setMidiPlaying(true);
-                      setLoadedMidiEvents(null);
                       setMidiMessage(`${phrase.events.length} notes • ${phrase.bpm} BPM • looping four-bar chord progression`);
                     }} className="flex items-center gap-1.5 rounded-lg bg-teal-400 text-[#062019] px-3 py-1.5 font-bold hover:bg-teal-300 active:scale-95">
-                      <Play className="w-3.5 h-3.5" /> Play generated
+                      <Play className="w-3.5 h-3.5" /> Play MIDI
                     </button>
                     <button onClick={() => { audioEngine.stopMidiPlayback(); setMidiPlaying(false); }} className="flex items-center gap-1.5 rounded-lg border border-teal-400/25 bg-black/20 px-3 py-1.5 text-teal-100">
                       <Square className="w-3 h-3" /> Stop
@@ -427,15 +414,20 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       const file = event.target.files?.[0];
                       if (!file) return;
                       try {
-                        const events = parseMidiFile(await file.arrayBuffer());
-                        setLoadedMidiEvents(events);
-                        setMidiBpm(events.bpm);
+                        const parsedEvents = parseMidiFile(await file.arrayBuffer());
+                        const sourceBpm = parsedEvents[0]?.sourceBpm || 120;
+                        const tempoRatio = sourceBpm / midiBpm;
+                        const events = parsedEvents.map((note) => ({
+                          ...note,
+                          time: note.time * tempoRatio,
+                          duration: note.duration * tempoRatio,
+                        }));
                         audioEngine.stopMidiPlayback();
                         audioEngine.toggle44Melody(false);
                         onSettingsChange({ isMelodyPlaying: false });
                         audioEngine.playMidiEvents(events);
                         setMidiPlaying(true);
-                        setMidiMessage(`${file.name} • ${events.length} notes loaded • source ${events.bpm} BPM`);
+                        setMidiMessage(`${file.name} • ${events.length} notes • ${midiBpm} BPM`);
                       } catch (error) {
                         setMidiMessage(error instanceof Error ? error.message : 'Could not read this MIDI file.');
                       } finally { event.target.value = ''; }
@@ -450,7 +442,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     <div className="flex items-center gap-2">
                       <Zap className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="font-mono text-xs font-bold text-emerald-200 uppercase tracking-wider">
-                        Step Sequencer
+                        16-Step Melody Sequencer
                       </span>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
                         Beat {activeBeat} • Step {activeStep + 1} ({lastStepNote})
@@ -643,7 +635,51 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                         className="w-20 accent-emerald-400 cursor-pointer"
                       />
                       <span className="font-mono text-emerald-300 w-8 text-right font-bold text-xs">
-                 Number(e.target.value) })}
+                        {synthSettings.melodyBpm}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 bg-emerald-950/25 p-2.5 rounded-xl border border-emerald-500/15">
+                    <div className="flex items-center gap-2">
+                      <Radio className="w-4 h-4 text-emerald-400" />
+                      <div>
+                        <div className="font-medium text-emerald-100">Sub Drone</div>
+                        <div className="text-[10px] text-emerald-400/60 font-mono">
+                          {synthSettings.isPadEnabled ? 'Active' : 'Silent (Standby)'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleTogglePad}
+                      className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
+                        synthSettings.isPadEnabled
+                          ? 'bg-emerald-400 text-emerald-950 shadow-[0_0_12px_rgba(52,211,153,0.4)]'
+                          : 'bg-emerald-900/40 text-emerald-300 hover:bg-emerald-800/40 border border-emerald-500/25'
+                      }`}
+                    >
+                      {synthSettings.isPadEnabled ? 'ACTIVE' : 'STANDBY'}
+                    </button>
+                  </div>
+
+                  <div className={`flex items-center justify-between gap-3 bg-emerald-950/25 p-2.5 rounded-xl border border-emerald-500/15 transition-opacity ${synthSettings.isPadEnabled ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="w-4 h-4 text-emerald-400" />
+                      <div>
+                        <div className="font-medium text-emerald-100">Drone Volume</div>
+                        <div className="text-[10px] text-emerald-400/60 font-mono">
+                          {synthSettings.isPadEnabled ? 'Pad Output' : 'Muted'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={synthSettings.padVolume}
+                        onChange={(e) => onSettingsChange({ padVolume: Number(e.target.value) })}
                         className="w-20 accent-emerald-400 cursor-pointer"
                       />
                       <span className="font-mono text-emerald-300 w-8 text-right font-bold text-xs">
